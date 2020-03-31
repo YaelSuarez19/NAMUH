@@ -1,0 +1,1436 @@
+table 50100 Pizarra
+{
+    DataClassification = ToBeClassified;
+    DataCaptionFields = CodigoP, Descripción;
+    LookupPageId = Pizarras;
+
+    fields
+    {
+        field(1; CodigoP; Code[20])
+        {
+            DataClassification = ToBeClassified;
+        }
+        field(2; Descripción; Text[100])
+        {
+            DataClassification = ToBeClassified;
+        }
+    }
+
+    keys
+    {
+        key(CodigoP; CodigoP)
+        {
+            Clustered = true;
+        }
+    }
+
+    fieldgroups
+    {
+        fieldgroup(DropDown; CodigoP, "Descripción") { }
+    }
+
+    var
+        myInt: Integer;
+
+    trigger OnInsert()
+    begin
+
+    end;
+
+    trigger OnModify()
+    begin
+
+    end;
+
+    trigger OnDelete()
+    begin
+
+    end;
+
+    trigger OnRename()
+    begin
+
+    end;
+
+}
+tableextension 50100 AddPizarraSalesHeader extends "Sales Header"
+{
+    fields
+    {
+        // Add changes to table fields here
+        field(50000; "N° Pizarra"; Code[20])
+        {
+            DataClassification = ToBeClassified;
+            TableRelation = Pizarra;
+        }
+    }
+}
+tableextension 50101 AddPizarraSalesInvHead extends "Sales Invoice Header"
+{
+    fields
+    {
+        // Add changes to table fields here]
+        field(50000; "N° Pizarra"; Code[20])
+        {
+            DataClassification = ToBeClassified;
+        }
+        field(50001; Gestionado; Boolean)
+        {
+            FieldClass = FlowField;
+            CalcFormula = exist (GestionEmbarqueHeader where("No." = field("No.")));
+        }
+        field(50002; "En Historico"; Boolean)
+        {
+            FieldClass = FlowField;
+            CalcFormula = exist (HistGestionEmbarqueHeader where("No." = field("No.")));
+        }
+    }
+}
+tableextension 50102 "PBAOrdenTransfererncia" extends "Transfer Header"
+{
+    fields
+    {
+        field(50000; "N° de Pizarra"; Code[20])
+        {
+            DataClassification = ToBeClassified;
+            TableRelation = PizarraTransferencia;
+        }
+        field(50001; "Paquete asignado"; Boolean)
+        {
+            FieldClass = FlowField;
+            CalcFormula = exist (TransferenciaPaqueteHeader where("No." = field("No.")));
+        }
+        field(50100; "Escaneo Producto"; Code[50])
+        {
+            DataClassification = CustomerContent;
+
+        }
+
+        field(50101; "Enviar a:"; Option)
+        {
+            OptionCaption = 'Null,Cantidad a enviar,Cantidad a Recibir';
+            OptionMembers = Null,Cantidad_a_enviar,Cantidad_a_Recibir;
+        }
+    }
+}
+tableextension 50103 CustLedgEntryEnten extends "Cust. Ledger Entry"
+{
+    fields
+    {
+        field(50000; "Last Detail Cust. Mov"; Integer)
+        {
+            FieldClass = FlowField;
+            CalcFormula = Max ("Detailed Cust. Ledg. Entry"."Entry No." WHERE("Document Type" = FIELD("Document Type"), "Document No." = FIELD("Document No."), "User ID" = FIELD("User ID"), "Customer No." = FIELD("Customer No.")));
+        }
+        field(50001; NumParcialidad; Integer)
+        {
+            DataClassification = ToBeClassified;
+        }
+        field(50002; "First Detail Cust. Mov"; Integer)
+        {
+            FieldClass = FlowField;
+            CalcFormula = Min ("Detailed Cust. Ledg. Entry"."Entry No." WHERE("Cust. Ledger Entry No." = FIELD("Entry No.")));
+        }
+        field(50003; "Entry Filter"; Integer)
+        {
+            FieldClass = FlowFilter;
+        }
+        field(50004; "Count Of Apply"; Integer)
+        {
+            FieldClass = FlowField;
+            CalcFormula = Count ("Detailed Cust. Ledg. Entry" WHERE("Cust. Ledger Entry No." = FIELD("Entry No."), "Entry Type" = FILTER(Application), "Entry No." = FIELD("Entry Filter")));
+        }
+        field(50005; ImpSaldoInsoluto; Decimal)
+        {
+            DataClassification = ToBeClassified;
+        }
+        field(50006; ImpSaldoAnt; Decimal)
+        {
+            DataClassification = ToBeClassified;
+        }
+        field(50007; ImpPagado; Decimal)
+        {
+            DataClassification = ToBeClassified;
+        }
+        field(50008; "Remaining AmountExt"; Decimal)
+        {
+            FieldClass = FlowField;
+            CalcFormula = Sum ("Detailed Cust. Ledg. Entry".Amount WHERE("Cust. Ledger Entry No." = FIELD("Entry No."), "Posting Date" = FIELD("Date Filter"), "Entry No." = FIELD("Entry Filter")));
+        }
+    }
+
+    var
+        myInt: Integer;
+}
+tableextension 50104 ItemExten extends Item
+{
+    fields
+    {
+        field(50000; UbicacionGeo; Blob)
+        {
+            DataClassification = ToBeClassified;
+            CaptionML = ESM = 'Imagen Ubicación', ENU = 'Location Image';
+            Subtype = Bitmap;
+            Compressed = true;
+        }
+        field(50001; ResenaBlob; Blob)
+        {
+            Enabled = true;
+            CaptionML = ESM = 'Reseña', ENU = 'review';
+            Compressed = true;
+            Subtype = UserDefined;
+            DataClassification = CustomerContent;
+        }
+        field(50002; "ReservedQtyOnSalesOrderSurplus"; Decimal)
+        {
+            AccessByPermission = TableData "Sales Shipment Header" = R;
+            CalcFormula = - Sum ("Reservation Entry"."Quantity (Base)" WHERE("Item No." = FIELD("No."),
+                                                                            "Source Type" = CONST(37),
+                                                                            "Source Subtype" = CONST("1"),
+                                                                            "Reservation Status" = CONST(Surplus),
+                                                                            "Location Code" = FIELD("Location Filter"),
+                                                                            "Variant Code" = FIELD("Variant Filter"),
+                                                                            "Shipment Date" = FIELD("Date Filter")));
+            Caption = 'Cantidad en lotes asignados en pedidos venta';
+            DecimalPlaces = 0 : 5;
+            Editable = false;
+            FieldClass = FlowField;
+        }
+        field(50003; PrecioDollar; Decimal)
+        {
+            DataClassification = ToBeClassified;
+            CaptionML = ESM = 'Precio en Dolares con Iva', ENU = 'Dollar price whitout VAT ';
+            trigger OnValidate()
+            var
+                Aux: Decimal;
+            begin
+                if PrecioDollar <> 0 then begin
+                    Aux := PrecioDollar - (PrecioDollar * 0.16);
+                    PrecioDolarSinIva := Round(Aux, 0.01, '>');
+                end;
+            end;
+        }
+        field(50004; PrecioDolarSinIva; Decimal)
+        {
+            DataClassification = ToBeClassified;
+            CaptionML = ESM = 'Precio en Dolares Sin Iva', ENU = 'Dollar price with VAT';
+        }
+
+    }
+    trigger OnBeforeModify()
+    var
+        myInt: Integer;
+    begin
+
+        if PBATablaCorreos.FindFirst() then begin
+            repeat
+                if PBATablaCorreos."Notificación Cambio Precio" = true then
+                    PBAListRecipients.Add(PBATablaCorreos."E-Mail");
+
+            until PBATablaCorreos.Next() = 0;
+
+        end;
+
+
+        PBATablaSMTP.Get();
+        PBAFromaddress := PBATablaSMTP."User ID";
+
+
+
+        if Rec."Unit Price" <> xRec."Unit Price" then begin
+            PBAFromname := 'NAMUH';
+            PBASubject := 'Notificación cambio de precio articulo: ' + Rec."No.";
+            PBAPrecio := Rec."Unit Price";
+            PBAPrecioAnterior := xRec."Unit Price";
+
+            PBADescripcionProducto := xRec.Description;
+
+            PBAHorayFechaModify := CurrentDateTime;
+
+
+            PBABody := '<B><h3>Se ha registrado una modificación de precio en sistema con los siguientes datos</h3></B>'
+            + '<BR>' +
+            '- Código de articulo: ' + xRec."No." + '<BR>' +
+            '- Descripción: ' + PBADescripcionProducto + '<BR>' +
+            '- Fecha y hora modificación: ' + Format(PBAHorayFechaModify) + '<BR>' +
+            '- Valor anterior: ' + Format(PBAPrecioAnterior) + '<BR>' +
+            '- Valor nuevo: ' + Format(PBAPrecio) + '<BR>' +
+            '- Usuario que realizo movimiento: ' + UserId() + '<BR>' +
+            '- Tipo movimiento: ' + 'Ficha Producto';
+
+
+
+            PBACodeUnitSMTMail.CreateMessage(PBAFromname, PBAFromaddress, PBAListRecipients, PBASubject, PBABody);
+            PBACodeUnitSMTMail.Send();
+        end;
+    end;
+
+    var
+        PBAPrecio: Decimal;
+        PBAPrecioAnterior: Decimal;
+        PBACodeUnitSMTMail: Codeunit "SMTP Mail";
+
+        PBAFromname: Text;
+        PBAFromaddress: Text;
+
+        PBAListRecipients: List of [Text];
+        PBASubject: Text;
+        PBABody: Text;
+        PBATablaCorreos: Record "User Setup";
+        PBADescripcionProducto: Text;
+        PBATablaProductos: Record Item;
+        PBAHorayFechaModify: DateTime;
+        PBATablaSMTP: Record "SMTP Mail Setup";
+
+
+    procedure GetResenaBigText(): Text
+    var
+        TempBlob: Record TempBlobExten;
+        CR: Text[1];
+    begin
+        CalcFields(ResenaBlob);
+        IF NOT ResenaBlob.HASVALUE THEN
+            EXIT('');
+        CR[1] := 10;
+        TempBlob.Blob := ResenaBlob;
+        EXIT(TempBlob.ReadAsText(CR, TEXTENCODING::Windows));
+    end;
+
+    procedure SetWorkDescription(NewWorkDescription: Text)
+    var
+        TempBlob: Record TempBlobExten;
+    begin
+        Clear(ResenaBlob);
+        IF NewWorkDescription = '' THEN
+            EXIT;
+        TempBlob.Blob := ResenaBlob;
+        TempBlob.WriteAsText(NewWorkDescription, TEXTENCODING::Windows);
+        ResenaBlob := TempBlob.Blob;
+        MODIFY;
+    end;
+
+    trigger OnBeforeRename()
+    var
+        TBuser: Record User;
+        TBAccessControl: Record "Access Control";
+    begin
+        //Message('verificar permisos');
+        TBuser.SetRange("User Name", UserId);
+        if TBuser.FindFirst() then begin
+            TBAccessControl.SetRange("User Security ID", TBuser."User Security ID");
+            TBAccessControl.SetRange("Role ID", 'SUPER');
+            if TBAccessControl.FindFirst() then begin
+
+            end else
+                Error('No tienes permiso para editar');
+
+        end
+
+    end;
+
+}
+tableextension 50105 LotNoInformation extends "Lot No. Information"
+{
+    fields
+    {
+        // Add changes to table fields here
+        field(50100; AjenteAduanal; Text[250])
+        {
+            DataClassification = ToBeClassified;
+            Caption = 'Agente Aduanal';
+        }
+        field(50101; PuertoEntrada; Text[250])
+        {
+            DataClassification = ToBeClassified;
+            Caption = 'Puerto Entrada';
+        }
+        field(50102; FechaPedimento; Date)
+        {
+            DataClassification = ToBeClassified;
+            Caption = 'Fecha Pedimento';
+        }
+    }
+
+    var
+        myInt: Integer;
+}
+tableextension 50106 SalesPriceExten extends "Sales Price"
+{
+    fields
+    {
+        // Add changes to table fields here
+        field(50000; "Unit Price Includes VAT "; Decimal)
+        {
+            AutoFormatExpression = "Currency Code";
+            AutoFormatType = 2;
+            Caption = 'Precio Unitario con IVA';
+            MinValue = 0;
+
+            trigger OnValidate()
+            var
+                auxDecimal: Decimal;
+
+            begin
+                "Unit Price" := Round("Unit Price Includes VAT ", 0.01, '>');
+                if "Unit Price Includes VAT " <> 0 then begin
+                    auxDecimal := "Unit Price Includes VAT " / (1.16);
+                    "Unit Price" := Round(auxDecimal, 0.01, '>');
+                end;
+            end;
+        }
+    }
+
+    trigger OnBeforeModify()
+    var
+        PBACodeUnitModificarFichaProducto: Codeunit ModificacionFichaProducto;
+    begin
+
+        if PBATablaCorreos.FindFirst() then begin
+            repeat
+                if PBATablaCorreos."Notificación Cambio Precio" = true then
+                    PBAListRecipients.Add(PBATablaCorreos."E-Mail");
+
+            until PBATablaCorreos.Next() = 0;
+
+        end;
+
+
+        PBATablaSMTP.Get();
+        PBAFromaddress := PBATablaSMTP."User ID";
+
+
+        if Rec."Unit Price Includes VAT " <> xRec."Unit Price Includes VAT " then begin
+            PBAFromname := 'NAMUH';
+            PBASubject := 'Notificación cambio de precio articulo: ' + Rec."Item No.";
+            PBAPrecio := Rec."Unit Price Includes VAT ";
+            PBAPrecioAnterior := xRec."Unit Price Includes VAT ";
+
+            PBATablaProductos.SetRange("No.", Rec."Item No.");
+            if PBATablaProductos.FindFirst() then begin
+                PBADescripcionProducto := PBATablaProductos.Description;
+            end;
+            PBAHorayFechaModify := CurrentDateTime;
+
+            PBAFechaInicio := Format(Rec."Starting Date");
+            PBAFechaTermino := Format(Rec."Ending Date");
+
+            if PBAFechaInicio = '' then begin
+                PBAFechaInicio := 'N/A';
+            end;
+
+            if PBAFechaTermino = '' then begin
+                PBAFechaTermino := 'N/A';
+            end;
+
+
+            PBABody := '<B><h3>Se ha registrado una modificación de precio en  sistema con los siguientes datos</h3></B>'
+            + '<BR>' +
+            '- Código de articulo: ' + Rec."Item No." + '<BR>' +
+            '- Descripción: ' + PBADescripcionProducto + '<BR>' +
+            '- Fecha y hora modificación: ' + Format(PBAHorayFechaModify) + '<BR>' +
+            '- Valor anterior: ' + Format(PBAPrecioAnterior) + '<BR>' +
+            '- Valor nuevo: ' + Format(PBAPrecio) + '<BR>' +
+            '- Usuario que realizo movimiento: ' + UserId() + '<BR>' +
+            '- Tipo movimiento: ' + 'LISTA DE PRECIOS' + '<BR>' +
+            '- Fecha Inicio: ' + PBAFechaInicio + '<BR>' +
+            '- Fecha Termino: ' + PBAFechaTermino;
+
+
+
+            PBACodeUnitSMTMail.CreateMessage(PBAFromname, PBAFromaddress, PBAListRecipients, PBASubject, PBABody);
+            PBACodeUnitSMTMail.Send();
+
+            PBACodeUnitModificarFichaProducto.ModificarPrecio(Rec."Item No.", PBAPrecio);
+
+        end;
+
+    end;
+
+    var
+        PBAPrecio: Decimal;
+        PBAPrecioAnterior: Decimal;
+        PBACodeUnitSMTMail: Codeunit "SMTP Mail";
+        PBAFromname: Text;
+        PBAFromaddress: Text;
+        PBAListRecipients: List of [Text];
+        PBASubject: Text;
+        PBABody: Text;
+        PBATablaCorreos: Record "User Setup";
+        PBADescripcionProducto: Text;
+        PBATablaProductos: Record Item;
+        PBAHorayFechaModify: DateTime;
+        PBATablaSMTP: Record "SMTP Mail Setup";
+        PBAFechaInicio: Text;
+        PBAFechaTermino: Text;
+}
+tableextension 50107 UserSetup extends "User Setup"
+{
+    fields
+    {
+        // Add changes to table fields here
+        field(50000; "Precios Especiales"; Boolean)
+        {
+            DataClassification = ToBeClassified;
+        }
+        field(50001; "Editar Precios Unitarios PV"; Boolean)
+        {
+            DataClassification = ToBeClassified;
+            CaptionML = ESM = 'Editar Precios Unitarios PV', ENU = 'Edit unit price';
+        }
+        field(50002; "Editar Descuento"; Boolean)
+        {
+            DataClassification = ToBeClassified;
+            CaptionML = ESM = 'Editar % Descuento PV', ENU = 'Edit Line Discount';
+        }
+        field(50100; "Notificación Cambio Precio"; Boolean)
+        {
+        }
+    }
+
+    var
+        myInt: Integer;
+}
+tableextension 50108 SalesCrMemoHeader extends "Sales Cr.Memo Header"
+{
+    fields
+    {
+        field(50000; "N° Pizarra"; Code[20])
+        {
+            DataClassification = ToBeClassified;
+        }
+    }
+}
+tableextension 50110 SalesLine extends "Sales Line"
+{
+    fields
+    {
+        field(50000; PrecioDolar; Decimal)
+        {
+            DataClassification = ToBeClassified;
+            CaptionML = ESM = 'Precio en Dolares', ENU = 'Dollar price';
+        }
+    }
+}
+tableextension 50111 GeneralLedgerSetup extends "General Ledger Setup"
+{
+    fields
+    {
+        field(50000; "Tipo de Cambio Dolar"; Decimal)
+        {
+            DataClassification = ToBeClassified;
+            CaptionML = ESM = 'Tipo de Cambio Dólar', ENU = 'Dollar exchange rate';
+        }
+        field(50001; UsarPrecioDolar; Boolean)
+        {
+            DataClassification = ToBeClassified;
+            CaptionML = ESM = 'Usar precio dolar', ENU = 'Use dollar price';
+        }
+    }
+
+    var
+        myInt: Integer;
+}
+
+table 50101 GestionEmbarqueHeader
+{
+    Caption = 'Gestion de Envíos';
+    //CaptionML = ENU = 'boarding management', ESM = ' Gestion de Embarque';
+    DataClassification = ToBeClassified;
+    fields
+    {
+        field(1; Estado; Option)
+        {
+            DataClassification = ToBeClassified;
+            OptionMembers = "Surtiendo y empacando","Por enviar",Enviado;
+        }
+
+        field(3; "No."; code[20])
+        {
+            DataClassification = ToBeClassified;
+            Caption = 'N° Factura';
+            //CaptionML = ENU = 'Invoice No', ESM = 'N° Factura';
+        }
+        field(4; "Bill-to Customer No."; code[20])
+        {
+            DataClassification = ToBeClassified;
+            Caption = 'N° Cliente';
+            //CaptionML = ENU = 'Customer No.', ESM = 'N° Cliente';
+        }
+        field(5; "Bill-to Name"; text[50])
+        {
+            DataClassification = ToBeClassified;
+            Caption = 'Nombre cliente';
+            //CaptionML = ENU = 'Name Client', ESM = 'Nombre cliente';
+        }
+        field(21; "Shipment Date"; Date)
+        {
+            DataClassification = ToBeClassified;
+            Caption = 'Fecha envío';
+            //CaptionML = ENU = 'Shipment Date', ESM = 'Fecha envío';
+        }
+        field(28; "Location Code"; code[20])
+        {
+            DataClassification = ToBeClassified;
+            Caption = 'Cód. almacén';
+            //CaptionML = ENU = ' Location Code', ESM = 'Cód. almacén';
+        }
+        field(44; "Order No."; Code[20])
+        {
+            DataClassification = ToBeClassified;
+            Caption = 'N° pedido';
+            //CaptionML = ENU = 'Order No.', ESM = 'N° pedido';
+        }
+        field(50001; "Fecha inicio embarque"; Date)
+        {
+            DataClassification = ToBeClassified;
+            Caption = 'Fecha Inicio Envío';
+        }
+        field(50000; "N° Pizarra"; Code[20])
+        {
+            DataClassification = ToBeClassified;
+        }
+        field(50002; NoBulto; Integer)
+
+        {
+            DataClassification = ToBeClassified;
+            Caption = 'N° paquete';
+        }
+        field(50003; "Item No"; Code[20])
+        {
+            DataClassification = ToBeClassified;
+            Caption = 'N° producto';
+            //CaptionML = ENU = 'Item No', ESM = 'N° producto';
+            TableRelation = Item;
+            ValidateTableRelation = false;
+        }
+    }
+
+    keys
+    {
+        key("No."; "No.")
+        {
+            Clustered = true;
+        }
+    }
+    trigger OnInsert()
+    begin
+
+    end;
+
+    trigger OnModify()
+    begin
+
+    end;
+
+    trigger OnDelete()
+    var
+        LineasGestion: Record GestionEmbarqueLine;
+    begin
+        LineasGestion.SetRange("No.", Rec."No.");
+        LineasGestion.DeleteAll();
+    end;
+
+    trigger OnRename()
+    begin
+
+    end;
+
+}
+table 50102 GestionEmbarqueLine
+{
+    DataClassification = ToBeClassified;
+    fields
+    {
+        field(1; "No."; Code[20])
+        {
+            DataClassification = ToBeClassified;
+            Caption = 'N° Factura';
+            //CaptionML = ENU = 'Invoice No', ESM = 'N° Factura';
+        }
+        field(2; "Line No"; Integer)
+        {
+            DataClassification = ToBeClassified;
+            Caption = 'N° Linea';
+            //CaptionML = ENU = 'Line  No', ESM = 'N° Linea';
+        }
+        field(3; "Item No"; Code[20])
+        {
+            DataClassification = ToBeClassified;
+            Caption = 'N° producto';
+            //CaptionML = ENU = 'Item No', ESM = 'N° producto';
+            TableRelation = Item;
+        }
+        field(4; "Description"; Text[100])
+        {
+            DataClassification = ToBeClassified;
+            Caption = ' Descripción';
+            //CaptionML = ENU = 'Description', ESM = ' Descripción';
+        }
+        field(5; Quantity; Decimal)
+        {
+            DataClassification = ToBeClassified;
+            Caption = 'Cantidad';
+            //CaptionML = ENU = 'Quantity', ESM = 'Cantidad';
+        }
+        field(6; Bulto; Integer)
+        {
+
+            DataClassification = ToBeClassified;
+            Caption = 'N° Paquete';
+
+        }
+    }
+
+    keys
+    {
+        key("No. LineNo"; "No.", "Line No")
+        {
+            Clustered = true;
+        }
+    }
+    /*
+    var
+        myInt: Integer;*/
+
+    trigger OnInsert()
+    begin
+
+    end;
+
+    trigger OnModify()
+    begin
+
+    end;
+
+    trigger OnDelete()
+    begin
+
+    end;
+
+    trigger OnRename()
+    begin
+
+    end;
+
+}
+table 50103 HistGestionEmbarqueHeader
+{
+    Caption = 'Historico Gestión de Envíos';
+    //CaptionML = ENU = 'Historic Shipping Management', ESM = 'Historico de Gestion de Embarque ';
+    DataClassification = ToBeClassified;
+    fields
+    {
+        field(1; Estado; Option)
+        {
+            DataClassification = ToBeClassified;
+            OptionMembers = "Surtiendo y empacando","Por enviar",Enviado;
+        }
+
+        field(3; "No."; code[20])
+        {
+            DataClassification = ToBeClassified;
+            Caption = 'N° Factura';
+            //CaptionML = ENU = 'Invoice No', ESM = 'N° Factura';
+        }
+        field(4; "Bill-to Customer No."; code[20])
+        {
+            DataClassification = ToBeClassified;
+            Caption = 'N° Cliente';
+            //CaptionML = ENU = 'Customer No.', ESM = 'N° Cliente';
+        }
+        field(5; "Bill-to Name"; text[50])
+        {
+            DataClassification = ToBeClassified;
+            Caption = 'Nombre cliente';
+            //CaptionML = ENU = 'Name Client', ESM = 'Nombre cliente';
+        }
+        field(21; "Shipment Date"; Date)
+        {
+            DataClassification = ToBeClassified;
+            Caption = 'Fecha envío';
+            //CaptionML = ENU = 'Shipment Date', ESM = 'Fecha envío';
+        }
+        field(28; "Location Code"; code[20])
+        {
+            DataClassification = ToBeClassified;
+            Caption = 'Cód. almacén';
+            //CaptionML = ENU = ' Location Code', ESM = 'Cód. almacén';
+        }
+        field(44; "Order No."; Code[20])
+        {
+            DataClassification = ToBeClassified;
+            Caption = 'N° pedido';
+            //CaptionML = ENU = 'Order No.', ESM = 'N° pedido';
+        }
+        field(50001; "Fecha inicio embarque"; Date)
+        {
+            DataClassification = ToBeClassified;
+            Caption = 'Fecha inicio envío';
+        }
+        field(50000; "N° Pizarra"; Code[20])
+        {
+            DataClassification = ToBeClassified;
+        }
+        field(50002; NoBulto; Integer)
+        {
+            DataClassification = ToBeClassified;
+            Caption = 'N° Paquete';
+        }
+        field(50003; "Item No"; Code[20])
+        {
+            DataClassification = ToBeClassified;
+            Caption = 'N° producto';
+            //CaptionML = ENU = 'Item No', ESM = 'N° producto';
+        }
+        field(50004; "N° Identificación"; Text[250])
+        {
+            DataClassification = ToBeClassified;
+        }
+        field(50008; "Vendor"; Code[20])
+        {
+            DataClassification = ToBeClassified;
+            Caption = 'Proveedor';
+            //CaptionML = ENU = 'Vendor', ESM = 'Proveedor';
+            TableRelation = Vendor;
+        }
+        field(50009; Observaciones; Text[250])
+        {
+            DataClassification = ToBeClassified;
+        }
+        field(50010; FechaEntrega; Date)
+        {
+            DataClassification = ToBeClassified;
+        }
+        field(50011; Ruta; Code[20])
+        {
+            DataClassification = ToBeClassified;
+            TableRelation = Ruta;
+        }
+        field(50012; "Fecha entrega paquete"; Date)
+        {
+            DataClassification = ToBeClassified;
+        }
+        field(50013; "Estatus  envío"; Option)
+        {
+            DataClassification = ToBeClassified;
+            OptionMembers = "COMPLETO","INCOMPLETO";
+        }
+        field(50014; "Fecha Entrega 2"; Date)
+        {
+            DataClassification = ToBeClassified;
+        }
+        field(50015; "Fecha Entrega 3"; Date)
+        {
+            DataClassification = ToBeClassified;
+        }
+        field(50016; "Fecha Entrega 4"; Date)
+        {
+            DataClassification = ToBeClassified;
+        }
+        field(50017; Comentarios; Text[250])
+        {
+            DataClassification = ToBeClassified;
+        }
+        field(50018; "Estatus Adicionales"; Option)
+        {
+            DataClassification = ToBeClassified;
+            OptionMembers = "En transito","Almacenado CDMX","Almacenado SMA";
+        }
+    }
+
+    keys
+    {
+        key("No."; "No.")
+        {
+            Clustered = true;
+        }
+    }
+}
+table 50104 HistGestionEmbarqueLine
+{
+    DataClassification = ToBeClassified;
+    fields
+    {
+        field(1; "No."; Code[20])
+        {
+            DataClassification = ToBeClassified;
+            Caption = 'N° Factura';
+            //CaptionML = ENU = 'Invoice No', ESM = 'N° Factura';
+        }
+        field(2; "Line No"; Integer)
+        {
+            DataClassification = ToBeClassified;
+            Caption = 'N° Linea';
+            //CaptionML = ENU = 'Line  No', ESM = 'N° Linea';
+        }
+        field(3; "Item No"; Code[20])
+        {
+            DataClassification = ToBeClassified;
+            Caption = 'N° producto';
+            //CaptionML = ENU = 'Item No', ESM = 'N° producto';
+        }
+        field(4; "Description"; Text[100])
+        {
+            DataClassification = ToBeClassified;
+            Caption = 'Descripción';
+            //CaptionML = ENU = 'Description', ESM = 'Descripción';
+        }
+        field(5; Quantity; Decimal)
+        {
+            DataClassification = ToBeClassified;
+            Caption = 'Cantidad';
+            //CaptionML = ENU = 'Quantity', ESM = 'Cantidad';
+        }
+        field(6; Bulto; Integer)
+        {
+            DataClassification = ToBeClassified;
+            Caption = 'N° Paquete';
+            //CaptionML = ENU = 'Bulk No.', ESM = 'N° Bulto';
+        }
+    }
+
+    keys
+    {
+        key("No. LineNo"; "No.", "Line No")
+        {
+            Clustered = true;
+        }
+    }
+}
+table 50105 Ruta
+{
+    DataClassification = ToBeClassified;
+    LookupPageId = Ruta;
+
+    fields
+    {
+        field(1; NoRutaCod; Code[20])
+        {
+            DataClassification = ToBeClassified;
+            Caption = 'N° ruta';
+            //CaptionML = ENU = 'Route Code', ESM = 'N° ruta';
+        }
+        field(2; Description; Text[50])
+        {
+            DataClassification = ToBeClassified;
+            Caption = 'Descripción';
+            //CaptionML = ENU = 'Description', ESM = 'Descripción';
+        }
+        field(3; PrecioInferior; Decimal)
+        {
+            DataClassification = ToBeClassified;
+            Caption = 'Precio Inferior';
+
+        }
+        field(4; PrecioSuperior; Decimal)
+        {
+            DataClassification = ToBeClassified;
+            Caption = 'Precio Superior';
+        }
+    }
+
+    keys
+    {
+        key(NoRutaCod; NoRutaCod)
+        {
+            Clustered = true;
+        }
+    }
+
+    var
+    // myInt: Integer;
+
+    trigger OnInsert()
+    begin
+
+    end;
+
+    trigger OnModify()
+    begin
+
+    end;
+
+    trigger OnDelete()
+    begin
+
+    end;
+
+    trigger OnRename()
+    begin
+
+    end;
+
+}
+table 50106 "Almacen Por Producto"
+{
+    DataClassification = ToBeClassified;
+
+    fields
+    {
+        field(1; "Cod.Producto"; Code[50]) { }
+        field(2; Almacen; Code[50]) { }
+        field(3; Cantidad; Decimal) { }
+        field(4; Fecha; Date) { }
+        field(5; Hora; Time) { }
+        field(6; "Cod.Pais"; Code[20]) { }
+        field(7; Pais; Text[2048]) { }
+        field(8; "Precio Con IVA"; Decimal) { }
+
+    }
+
+    keys
+    {
+        key(PK; "Cod.Producto", Almacen, Fecha, Hora) { }
+
+    }
+
+    var
+        myInt: Integer;
+
+    trigger OnInsert()
+    begin
+
+    end;
+
+    trigger OnModify()
+    begin
+
+    end;
+
+    trigger OnDelete()
+    begin
+
+    end;
+
+    trigger OnRename()
+    begin
+
+    end;
+
+}
+table 50107 PizarraTransferencia
+{
+    DataClassification = ToBeClassified;
+
+    fields
+    {
+        field(1; CodigoPizarra; Code[20]) { Caption = 'Cod. Pizarra'; }
+        field(2; Descripción; Text[100]) { }
+    }
+
+    keys
+    {
+        key(PK; CodigoPizarra)
+        {
+            Clustered = true;
+        }
+    }
+    fieldgroups
+    {
+        fieldgroup(DropDown; CodigoPizarra, "Descripción") { }
+    }
+    var
+        myInt: Integer;
+
+    trigger OnInsert()
+    begin
+
+    end;
+
+    trigger OnModify()
+    begin
+
+    end;
+
+    trigger OnDelete()
+    begin
+
+    end;
+
+    trigger OnRename()
+    begin
+
+    end;
+
+}
+table 50108 "TransferenciaPaqueteHeader"
+{
+    CaptionML = ENU = 'Package transfer', ESM = 'Paquetes de transferencia';
+    DataClassification = ToBeClassified;
+    fields
+    {
+        field(1; "No."; Code[20])
+        {
+            DataClassification = ToBeClassified;
+        }
+        field(2; "Transfer-from Code"; code[10])
+        {
+            DataClassification = ToBeClassified;
+            CaptionML = ENU = 'Transfer from-cod', ESM = 'Transferir desde-Cód';
+        }
+        field(11; "Transfer-to Code"; code[10])
+        {
+            DataClassification = ToBeClassified;
+            CaptionML = ENU = 'Transfer to Code', ESM = 'Transferir A-Cód';
+        }
+        field(20; "Posting Date"; Date)
+        {
+            DataClassification = ToBeClassified;
+            CaptionML = ENU = 'Posting Date', ESM = 'Fecha registro';
+        }
+
+        field(50000; "N° Pizarra"; Code[20])
+        {
+            DataClassification = ToBeClassified;
+        }
+        field(50001; "N° Paquete"; Integer)
+        {
+            DataClassification = ToBeClassified;
+        }
+        field(50002; "Item No"; Code[20])
+        {
+            DataClassification = ToBeClassified;
+            CaptionML = ENU = 'Item No', ESM = 'N° producto';
+
+        }
+    }
+
+    keys
+    {
+        key("No."; "No.")
+        {
+            Clustered = true;
+        }
+    }
+
+
+    trigger OnInsert()
+    begin
+
+    end;
+
+    trigger OnModify()
+    begin
+
+    end;
+
+    trigger OnRename()
+    begin
+
+    end;
+
+}
+table 50109 TransferPackageLine
+{
+    CaptionML = ENU = 'Package transfer line', ESM = 'Lineas de paquetes de transferencia';
+    DataClassification = ToBeClassified;
+    fields
+    {
+        field(1; "Document No."; Code[20])
+        {
+            DataClassification = ToBeClassified;
+            CaptionML = ENU = 'Document No', ESM = 'N° documento';
+        }
+        field(2; "Line No"; Integer)
+        {
+            DataClassification = ToBeClassified;
+            CaptionML = ENU = 'Line  No', ESM = 'N° Linea';
+        }
+        field(3; "Item No"; Code[20])
+        {
+            DataClassification = ToBeClassified;
+            CaptionML = ENU = 'Item No', ESM = 'N° producto';
+            //TableRelation = Item;
+        }
+        field(4; "Description"; Text[50])
+        {
+            DataClassification = ToBeClassified;
+            CaptionML = ENU = 'Description', ESM = ' Descripción';
+        }
+        field(5; Quantity; Decimal)
+        {
+            DataClassification = ToBeClassified;
+            CaptionML = ENU = 'Quantity', ESM = 'Cantidad';
+        }
+        field(6; "Package No."; Integer)
+        {
+            DataClassification = ToBeClassified;
+            CaptionML = ENU = 'Package No.', ESM = 'N° Paquete';
+        }
+    }
+
+    keys
+    {
+        key("No. LineNo"; "Document No.", "Line No")
+        {
+            Clustered = true;
+        }
+    }
+
+    trigger OnInsert()
+    begin
+
+    end;
+
+    trigger OnModify()
+    begin
+
+    end;
+
+    trigger OnDelete()
+    begin
+
+    end;
+
+    trigger OnRename()
+    begin
+
+    end;
+
+}
+table 50110 TempBlobExten
+{
+    fields
+    {
+        field(1; "Primary Key"; Integer)
+        {
+        }
+        field(2; Blob; Blob)
+        {
+        }
+    }
+    keys
+    {
+        key("Primary Key"; "Primary Key")
+        {
+        }
+    }
+    var
+        GlobalInStream: InStream;
+        GlobalOutStream: OutStream;
+        ReadLinesInitialized: Boolean;
+        WriteLinesInitialized: Boolean;
+        NoContentErr: TextConst;
+        UnknownImageTypeErr: TextConst;
+        XmlCannotBeLoadedErr: TextConst;
+
+
+
+    procedure WriteAsText(Content: Text; Encoding: TextEncoding)
+    var
+        OutStr: OutStream;
+    begin
+        Clear(Blob);
+        if Content = '' then
+            exit;
+
+        Blob.CreateOutStream(OutStr, Encoding);
+        OutStr.WriteText(Content);
+    end;
+
+    procedure ReadAsText(LineSeparator: Text; Encoding: TextEncoding) Content: Text
+    var
+        InStream: InStream;
+        ContentLine: Text;
+
+    begin
+        Blob.CreateInStream(InStream, Encoding);
+        InStream.ReadText(Content);
+        while not InStream.EOS do begin
+            InStream.ReadText(ContentLine);
+            Content += LineSeparator + ContentLine;
+        end;
+
+    end;
+
+    procedure ReadAsTextWithCRLFLineSeparator(): Text
+    var
+        CRLF: Text[2];
+    begin
+        CRLF[1] := 13;
+        CRLF[2] := 10;
+        exit(ReadAsText(CRLF, TextEncoding::UTF8));
+    end;
+
+    procedure StartReadingTextLines(Encoding: TextEncoding)
+    var
+
+    begin
+        Blob.CreateInStream(GlobalInStream, Encoding);
+        ReadLinesInitialized := true;
+    end;
+
+    procedure StartWritingTextLines(Encoding: TextEncoding)
+    var
+    begin
+        Clear(Blob);
+        Blob.CreateOutStream(GlobalOutStream, Encoding);
+        WriteLinesInitialized := true;
+    end;
+
+    procedure MoreTextLines(): Boolean
+    var
+    begin
+        if not ReadLinesInitialized then
+            StartReadingTextLines(TextEncoding::Windows);
+        exit(not GlobalInStream.EOS);
+    end;
+
+    procedure ReadTextLine(): Text
+    var
+        ContentLine: Text;
+    begin
+        if not MoreTextLines() then
+            exit('');
+        GlobalInStream.ReadText(ContentLine);
+        exit(ContentLine);
+    end;
+
+    procedure WriteTextLine(Content: Text)
+    var
+    begin
+        if not WriteLinesInitialized then
+            StartWritingTextLines(TextEncoding::Windows);
+        GlobalOutStream.WriteText(Content);
+    end;
+
+
+}
+table 50111 Costos
+{
+    DataClassification = ToBeClassified;
+
+    fields
+    {
+        field(1; NoMov; Integer)
+        {
+            DataClassification = ToBeClassified;
+        }
+    }
+
+    keys
+    {
+        key(no; NoMov)
+        {
+            Clustered = true;
+        }
+    }
+
+    var
+        myInt: Integer;
+
+    trigger OnInsert()
+    begin
+
+    end;
+
+    trigger OnModify()
+    begin
+
+    end;
+
+    trigger OnDelete()
+    begin
+
+    end;
+
+    trigger OnRename()
+    begin
+
+    end;
+
+}
+
+table 50112 "Cues Yael"
+{
+    Caption = 'Activities Cue Yael';
+
+    fields
+    {
+        field(1; "Primary Key"; Code[10])
+        {
+            Caption = 'Primary Key';
+        }
+        field(2; "Ventas del Mes CDMX"; Decimal)
+        {
+            AutoFormatExpression = GetAmountFormat;
+            AutoFormatType = 11;
+            DecimalPlaces = 0 : 0;
+            Caption = 'CDMX';
+        }
+
+        field(3; "Ventas del Mes SMA"; Decimal)
+        {
+            AutoFormatExpression = GetAmountFormat;
+            AutoFormatType = 11;
+            DecimalPlaces = 0 : 0;
+            Caption = 'SMA';
+        }
+
+        field(4; "Ventas del Mes MTY"; Decimal)
+        {
+            AutoFormatExpression = GetAmountFormat;
+            AutoFormatType = 11;
+            DecimalPlaces = 0 : 0;
+            Caption = 'MTY';
+        }
+
+        field(5; "Ventas del Mes CAB"; Decimal)
+        {
+            AutoFormatExpression = GetAmountFormat;
+            AutoFormatType = 11;
+            DecimalPlaces = 0 : 0;
+            Caption = 'CAB';
+        }
+    }
+
+    keys
+    {
+        key(Key1; "Primary Key")
+        {
+            Clustered = true;
+        }
+    }
+
+    var
+        myInt: Integer;
+
+    procedure GetAmountFormat(): Text
+    var
+        GeneralLedgerSetup: Record "General Ledger Setup";
+        UserPersonalization: Record "User Personalization";
+        CurrencySymbol: Text[10];
+    begin
+        GeneralLedgerSetup.Get;
+        CurrencySymbol := GeneralLedgerSetup.GetCurrencySymbol;
+
+        if UserPersonalization.Get(UserSecurityId) and (CurrencySymbol <> '') then
+            case UserPersonalization."Locale ID" of
+                1030, // da-DK
+              1053, // sv-Se
+              1044: // no-no
+                    exit('<Precision,0:0><Standard Format,0>' + CurrencySymbol);
+                2057, // en-gb
+              1033, // en-us
+              4108, // fr-ch
+              1031, // de-de
+              2055, // de-ch
+              1040, // it-it
+              2064, // it-ch
+              1043, // nl-nl
+              2067, // nl-be
+              2060, // fr-be
+              3079, // de-at
+              1035, // fi
+              1034: // es-es
+                    exit(CurrencySymbol + '<Precision,0:0><Standard Format,0>');
+            end;
+
+        exit(GetDefaultAmountFormat);
+    end;
+
+    local procedure GetDefaultAmountFormat(): Text
+    begin
+        exit('$<Precision,0:0><Standard Format,0>');
+    end;
+}

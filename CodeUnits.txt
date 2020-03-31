@@ -1,0 +1,1391 @@
+codeunit 50100 MandaHistorico
+{
+    trigger OnRun()
+    begin
+    end;
+
+    var
+
+    procedure TransfiereHeader(NoFact: Code[20])
+    var
+        OrigenDatosGestionados: Record GestionEmbarqueHeader;
+        HistDatosGestionados: Record HistGestionEmbarqueHeader;
+        Transfierelineas: Codeunit MandaHistorico;
+    begin
+        OrigenDatosGestionados.SetRange("No.", NoFact);
+        if OrigenDatosGestionados.FindFirst() then begin
+            HistDatosGestionados.TransferFields(OrigenDatosGestionados);
+            HistDatosGestionados.Estado := HistDatosGestionados.Estado::"Por enviar";
+            HistDatosGestionados.Insert();
+            Transfierelineas(HistDatosGestionados."No.")
+        end;
+    end;
+
+    local procedure TransfiereLineas(NoFact: Code[20])
+    var
+
+        OrigenLineas: Record GestionEmbarqueLine;
+        HistLineasGEstionadas: Record HistGestionEmbarqueLine;
+        OrigenHeader: Record GestionEmbarqueHeader;
+    begin
+        OrigenLineas.SetRange("No.", NoFact);
+        if OrigenLineas.FindSet() then begin
+            repeat
+                HistLineasGEstionadas.TransferFields(OrigenLineas);
+                HistLineasGEstionadas.Insert();
+            until OrigenLineas.Next() = 0;
+            DeleteLines(NoFact);
+
+        end;
+        OrigenHeader.SetRange("No.", NoFact);
+        if OrigenHeader.FindFirst() then begin
+            OrigenHeader.Delete();
+        end;
+        Message('Los datos fueron registrados en: Por enviar Gestión de Envíos');
+    end;
+
+    local procedure DeleteLines(NoFact: Code[20])
+    var
+        OrigenLine: Record GestionEmbarqueLine;
+    begin
+        OrigenLine.SetRange("No.", NoFact);
+        if OrigenLine.FindFirst() then begin
+            OrigenLine.DeleteAll();
+        end;
+
+    end;
+
+    procedure CambiaEstadoEnviado(NoFact: Code[20])
+    var
+        histGestionHeader: Record HistGestionEmbarqueHeader;
+
+    begin
+        histGestionHeader.SetRange("No.", NoFact);
+        if histGestionHeader.FindFirst() then begin
+            histGestionHeader.Estado := histGestionHeader.Estado::Enviado;
+            histGestionHeader.Modify();
+            Message('Los datos Fueron Registrados con el estado "Enviado"');
+        end;
+
+    end;
+}
+codeunit 50101 "SAT UtilitiesExten"
+{
+    // version NAVNA11.00
+
+    // This codeunit will house various utility functions used by the CFDI Mexican Reg F functionality.
+
+
+    trigger OnRun()
+    begin
+    end;
+
+    procedure GetSATPaymentMethodDescription(PaymentMeth: Code[10]): Text[50]
+    var
+        PaymentMethod: Record "Payment Method";
+        SATPaymentMethod: Record "SAT Payment Method";
+    begin
+        if PaymentMethod.Get(PaymentMeth) then begin
+            if SATPaymentMethod.Get(PaymentMethod."SAT Method of Payment") then
+                exit((SATPaymentMethod.Code + ' - ' + SATPaymentMethod.Description));
+        end;
+        exit(PaymentMeth);
+    end;
+
+    procedure GetSATPaymentTermDescription(PaymentTerm: Code[10]): Text[50]
+    var
+        PaymentTerms: Record "Payment Terms";
+        SATPaymentTerm: Record "SAT Payment Term";
+    begin
+        if PaymentTerms.Get(PaymentTerm) then begin
+            if SATPaymentTerm.Get(PaymentTerms."SAT Payment Term") then
+                exit((SATPaymentTerm.Code));
+        end;
+        exit(PaymentTerm);
+    end;
+
+    procedure GetSATTaxSchemeDescription(TaxScheme: Code[10]): Text[100]
+    var
+        SATTaxScheme: Record "SAT Tax Scheme";
+    begin
+        if SATTaxScheme.Get(TaxScheme) then
+            exit(SATTaxScheme."SAT Tax Scheme");
+        exit(TaxScheme);
+    end;
+}
+codeunit 50102 "E-Invoice Mgt_Enten"
+{
+    // version NAVNA13.00
+
+    Permissions = TableData "Sales Invoice Header" = rimd,
+                  TableData "Sales Cr.Memo Header" = rimd;
+
+    trigger OnRun()
+    begin
+    end;
+
+    procedure GetUUIDFromOriginalPrepayment(SalesInvoiceHeader: Record "Sales Invoice Header"; var SalesInvoiceNumber: Code[20]): Text[50]
+    var
+        SalesInvoiceHeader2: Record "Sales Invoice Header";
+    begin
+        // First, get the common sales order number
+        SalesInvoiceHeader2.Reset;
+        SalesInvoiceHeader2.SetFilter("Prepayment Order No.", '=%1', SalesInvoiceHeader."Order No.");
+        if SalesInvoiceHeader2.FindFirst then begin // We have the prepayment invoice
+            SalesInvoiceNumber := SalesInvoiceHeader2."No.";
+            exit(SalesInvoiceHeader2."Fiscal Invoice Number PAC");
+        end;
+        exit('');
+    end;
+}
+
+codeunit 50103 validaNobultos
+{
+    trigger OnRun()
+    begin
+    end;
+
+    procedure valida(NoFact: Code[20])
+    var
+        RepoBultos: Report "Gestion Bultos";
+        GestionEmbar: Record GestionEmbarqueHeader;
+        GestionLineas: Record GestionEmbarqueLine;
+        totalbultos: Integer;
+        GestionLine2: Record GestionEmbarqueLine;
+
+    begin
+
+        GestionLine2.SetRange("No.", NoFact);
+        if GestionLine2.FindSet() then begin
+            repeat
+
+                if totalbultos < GestionLine2.Bulto then begin
+                    totalbultos := GestionLine2.Bulto;
+                end;
+            until GestionLine2.Next() = 0;
+        end;
+
+        GestionLineas.SetRange("No.", NoFact);
+        if GestionLineas.FindFirst() then begin
+            //totalbultos := GestionLineas.Count;
+            GestionEmbar.Reset();
+            GestionEmbar.SetRange("No.", NoFact);
+            if GestionEmbar.FindFirst() then begin
+
+                if GestionEmbar.NoBulto = totalbultos then begin
+                    Clear(RepoBultos);
+                    RepoBultos.SetTableView(GestionEmbar);
+                    RepoBultos.RunModal();
+                end else begin
+
+                    GestionEmbar.NoBulto := totalbultos;
+                    GestionEmbar.Modify();
+                    Commit();
+                    Clear(RepoBultos);
+                    RepoBultos.SetTableView(GestionEmbar);
+                    RepoBultos.RunModal();
+
+                end;
+            end;
+        end;
+    end;
+
+    procedure ValidaAntesdeRegistrar(NoFact: Code[20])
+    var
+        GestionEmbar: Record GestionEmbarqueHeader;
+        GestionLineas: Record GestionEmbarqueLine;
+        totalbultos: Integer;
+        GestionLine2: Record GestionEmbarqueLine;
+
+    begin
+        GestionLine2.SetRange("No.", NoFact);
+        if GestionLine2.FindSet() then begin
+            repeat
+                if totalbultos < GestionLine2.Bulto then begin
+                    totalbultos := GestionLine2.Bulto;
+                end;
+            until GestionLine2.Next() = 0;
+        end;
+
+        GestionLineas.SetRange("No.", NoFact);
+        if GestionLineas.FindFirst() then begin
+            //totalbultos := GestionLineas.Count;
+            GestionEmbar.Reset();
+            GestionEmbar.SetRange("No.", NoFact);
+            if GestionEmbar.FindFirst() then begin
+
+                if GestionEmbar.NoBulto = totalbultos then begin
+
+                end else begin
+                    GestionEmbar.NoBulto := totalbultos;
+                    GestionEmbar.Modify();
+                    Commit();
+                end;
+            end;
+        end;
+
+    end;
+
+    var
+    //myInt: Integer;
+}
+codeunit 50105 ValidaPaquetes
+{
+    trigger OnRun()
+    begin
+
+    end;
+
+    procedure valida(NoFact: Code[20])
+    var
+        RepoBultos: Report "Paquetes de Transferencia";
+        GestionEmbar: Record TransferenciaPaqueteHeader;
+        GestionLineas: Record TransferPackageLine;
+        totalbultos: Integer;
+        GestionLine2: Record TransferPackageLine;
+
+    begin
+
+        GestionLine2.SetRange("Document No.", NoFact);
+        if GestionLine2.FindSet() then begin
+            repeat
+
+                if totalbultos < GestionLine2."Package No." then begin
+                    totalbultos := GestionLine2."Package No.";
+                end;
+            until GestionLine2.Next() = 0;
+        end;
+
+        GestionLineas.SetRange("Document No.", NoFact);
+        if GestionLineas.FindFirst() then begin
+            //totalbultos := GestionLineas.Count;
+            GestionEmbar.Reset();
+            GestionEmbar.SetRange("No.", NoFact);
+            if GestionEmbar.FindFirst() then begin
+
+                if GestionEmbar."N° Paquete" = totalbultos then begin
+                    Clear(RepoBultos);
+                    RepoBultos.SetTableView(GestionEmbar);
+                    RepoBultos.RunModal();
+                end else begin
+
+                    GestionEmbar."N° Paquete" := totalbultos;
+                    GestionEmbar.Modify();
+                    Commit();
+                    Clear(RepoBultos);
+                    RepoBultos.SetTableView(GestionEmbar);
+                    RepoBultos.RunModal();
+
+                end;
+            end;
+        end;
+    end;
+}
+codeunit 50106 ValidaCantidadePaquete
+{
+    trigger OnRun()
+    begin
+
+    end;
+
+    var
+        myInt: Integer;
+
+    procedure cantidadproducto(NoFact: Code[20])
+    var
+        SalesInvoiceHeader: Record "Sales Invoice Header";
+        SalesInvoiceLine: Record "Sales Invoice Line";
+        salesInvLine2: Record "Sales Invoice Line";
+        salesInvLine3: Record "Sales Invoice Line";
+        NoProducto: Code[20];
+        CantidadFactura: Decimal;
+        Gestionlineas: Record GestionEmbarqueLine;
+        GestionLine2: Record GestionEmbarqueLine;
+        sumacantidad: Decimal;
+    begin
+        SalesInvoiceHeader.SetRange("No.", NoFact);
+        if SalesInvoiceHeader.FindFirst() then begin
+            SalesInvoiceLine.SetRange("Document No.", NoFact);
+            //SalesInvoiceLine.SetRange(Type,SalesInvoiceLine::);
+            if SalesInvoiceLine.FindSet() then begin
+
+                repeat
+                    NoProducto := SalesInvoiceLine."No.";
+                    salesInvLine2.SetRange("Document No.", NoFact);
+                    salesInvLine2.SetRange("No.", NoProducto);
+                    if salesInvLine2.FindSet() then begin
+                        CantidadFactura := 0;
+                        repeat
+                            salesInvLine3.SetRange("Document No.", NoFact);
+                            salesInvLine3.SetRange("No.", NoProducto);
+                            if salesInvLine3.FindFirst() then begin
+                                repeat
+                                    CantidadFactura := CantidadFactura + salesInvLine2.Quantity;
+                                until salesInvLine3.Next() = 0;
+
+                            end;
+
+                            Gestionlineas.SetRange("No.", NoFact);
+                            if Gestionlineas.FindSet() then begin
+                                //Message('por entrar');
+                                GestionLine2.SetRange("No.", Gestionlineas."No.");
+                                GestionLine2.SetRange("Item No", NoProducto);
+                                if GestionLine2.FindSet() then begin
+                                    sumacantidad := 0;
+                                    repeat
+                                        sumacantidad := sumacantidad + GestionLine2.Quantity; ///hace el recorrido de suma cantidad que hay en las lineas
+                                    until GestionLine2.Next() = 0;
+                                    //Message('suma cantidad = %1', sumacantidad);
+                                end;
+
+                            end;
+                            if sumacantidad > CantidadFactura then begin
+                                Error('La cantidad registrada en las lineas ("%1") para el producto %2 exede la cantidad registrada en la factura %3 ', sumacantidad, NoProducto, NoFact);
+                            end;
+                        until salesInvLine2.Next() = 0;
+                        // Message('Tendria que seguir con el proceso');
+
+                    end;
+
+                until SalesInvoiceLine.Next() = 0;
+            end;
+
+        end;
+
+
+    end;
+}
+codeunit 50107 Barcode
+{
+    procedure DoGenerateBarcode(var Barcode: Code[100]; BarcodeType: Integer; var tempb: Record TempBlobExten temporary)
+    begin
+        Clear(tempb);
+
+        // Empty Barcode Value
+        if Barcode = '' then
+            exit;
+
+        // Barcode Type Selection
+        case BarcodeType of
+            0:
+                BarcodeTypeValue := 'c39';
+            1:
+                BarcodeTypeValue := 'c128a';
+            2:
+                BarcodeTypeValue := 'c128b';
+            3:
+                BarcodeTypeValue := 'c1218c';
+            4:
+                BarcodeTypeValue := 'i2of5';
+            5:
+                BarcodeTypeValue := 'qr';
+            else
+                Error(Err000);
+        end;
+
+        //Generate URL For Request
+        InitArguments(Barcode);
+
+        // Webservice Calling
+        if not CallWebService() then
+            exit;
+
+        //Transefer Call
+        tempb := tempblb;
+    end;
+
+    local procedure InitArguments(Barcode: Code[100])
+    var
+        BaseURL: Text;
+    begin
+        BaseURL := 'http://barcodes4.me';
+
+        if BarcodeTypeValue = 'qr' then
+            RequestURL := StrSubstNo('%1/barcode/qr/%2.%3?value=%4&size=%5&ecclevel=%6',
+                                        BaseURL,
+                                        Barcode,
+                                        'png',
+                                        Barcode,
+                                        '105x105',
+                                        0)
+        else
+            RequestURL := StrSubstNo('%1/barcode/%2/%3.%4',
+                                        BaseURL,
+                                        BarcodeTypeValue,
+                                        Barcode,
+                                        'png');
+
+        RequestMethod := RequestMethod::get;
+    end;
+
+    local procedure CallWebService() Success: Boolean
+    begin
+        Success := CallRESTWebService();
+    end;
+
+    procedure CallRESTWebService(): Boolean
+    var
+        Client: HttpClient;
+        AuthHeaderValue: HttpHeaders;
+        Headers: HttpHeaders;
+        RequestMessage: HttpRequestMessage;
+        ResponseMessage: HttpResponseMessage;
+        Content: HttpContent;
+        TempBlob: Record TempBlobExten temporary;
+    begin
+        RequestMessage.Method := Format(RequestMethod);
+        RequestMessage.SetRequestUri(RequestURL);
+
+        RequestMessage.GetHeaders(Headers);
+
+        Client.Send(RequestMessage, ResponseMessage);
+
+        Headers := ResponseMessage.Headers;
+        SetResponseHeaders(Headers);
+
+        Content := ResponseMessage.Content;
+        SetResponseContent(Content);
+
+        EXIT(ResponseMessage.IsSuccessStatusCode);
+    end;
+
+    procedure SetResponseHeaders(var value: HttpHeaders)
+    begin
+        ResponseHeaders := value;
+    end;
+
+    procedure SetResponseContent(var value: HttpContent)
+    var
+        InStr: InStream;
+        OutStr: OutStream;
+    begin
+        tempblb.Blob.CreateInStream(InStr);
+        value.ReadAs(InStr);
+
+        tempblb.Blob.CreateOutStream(OutStr);
+        CopyStream(OutStr, InStr);
+
+    end;
+
+    var
+        RequestURL: Text[250];
+        RequestMethod: Option get,post,delete,patch,put;
+        ResponseHeaders: HttpHeaders;
+        tempblb: Record TempBlobExten temporary;
+        BarcodeTypeValue: Text;
+        Err000: Label 'Please take integer value between 0 to 5.';
+}
+codeunit 50108 Barcode2
+{
+    procedure DoGenerateBarcode(var Barcode: Code[100]; BarcodeType: Integer; var tempb: Record TempBlobExten temporary)
+    begin
+        Clear(tempb);
+
+        // Empty Barcode Value
+        if Barcode = '' then
+            exit;
+
+        // Barcode Type Selection
+        case BarcodeType of
+            0:
+                BarcodeTypeValue := 'c39';
+            1:
+                BarcodeTypeValue := 'c128a';
+            2:
+                BarcodeTypeValue := 'c128b';
+            3:
+                BarcodeTypeValue := 'c1218c';
+            4:
+                BarcodeTypeValue := 'i2of5';
+            5:
+                BarcodeTypeValue := 'qr';
+            else
+                Error(Err000);
+        end;
+
+        //Generate URL For Request
+        InitArguments(Barcode);
+
+        // Webservice Calling
+        if not CallWebService() then
+            exit;
+
+        //Transefer Call
+        tempb := tempblb;
+    end;
+
+    local procedure InitArguments(Barcode: Code[100])
+    var
+        BaseURL: Text;
+    begin
+        BaseURL := 'http://barcodes4.me';
+
+        if BarcodeTypeValue = 'qr' then
+            RequestURL := StrSubstNo('%1/barcode/qr/%2.%3?value=%4&size=%5&ecclevel=%6',
+                                        BaseURL,
+                                        Barcode,
+                                        'png',
+                                        Barcode,
+                                        '105x105',
+                                        0)
+        else
+            RequestURL := StrSubstNo('%1/barcode/%2/%3.%4',
+                                        BaseURL,
+                                        BarcodeTypeValue,
+                                        Barcode,
+                                        'png');
+
+        RequestMethod := RequestMethod::get;
+    end;
+
+    local procedure CallWebService() Success: Boolean
+    begin
+        Success := CallRESTWebService();
+    end;
+
+    procedure CallRESTWebService(): Boolean
+    var
+        Client: HttpClient;
+        AuthHeaderValue: HttpHeaders;
+        Headers: HttpHeaders;
+        RequestMessage: HttpRequestMessage;
+        ResponseMessage: HttpResponseMessage;
+        Content: HttpContent;
+        TempBlob: Record TempBlobExten temporary;
+    begin
+        RequestMessage.Method := Format(RequestMethod);
+        RequestMessage.SetRequestUri(RequestURL);
+
+        RequestMessage.GetHeaders(Headers);
+
+        Client.Send(RequestMessage, ResponseMessage);
+
+        Headers := ResponseMessage.Headers;
+        SetResponseHeaders(Headers);
+
+        Content := ResponseMessage.Content;
+        SetResponseContent(Content);
+
+        EXIT(ResponseMessage.IsSuccessStatusCode);
+    end;
+
+    procedure SetResponseHeaders(var value: HttpHeaders)
+    begin
+        ResponseHeaders := value;
+    end;
+
+    procedure SetResponseContent(var value: HttpContent)
+    var
+        InStr: InStream;
+        OutStr: OutStream;
+    begin
+        tempblb.Blob.CreateInStream(InStr);
+        value.ReadAs(InStr);
+
+        tempblb.Blob.CreateOutStream(OutStr);
+        CopyStream(OutStr, InStr);
+
+    end;
+
+    var
+        RequestURL: Text[250];
+        RequestMethod: Option get,post,delete,patch,put;
+        ResponseHeaders: HttpHeaders;
+        tempblb: Record TempBlobExten temporary;
+        BarcodeTypeValue: Text;
+        Err000: Label 'Please take integer value between 0 to 5.';
+}
+
+codeunit 50109 BlobManagementExten
+{
+    trigger OnRun()
+    begin
+
+    end;
+
+    var
+        Tempblob: Record TempBlobExten;
+        InStr: InStream;
+        OutStr: OutStream;
+        TempText: Text[1024];
+
+    procedure Init()
+    var
+    begin
+        Clear(Tempblob);
+        Tempblob.Init();
+        Tempblob.Blob.CreateOutStream(OutStr);
+    end;
+
+    procedure Write(TextParam: Text)
+    var
+    begin
+        if StrLen(TextParam) > 1 then
+            OutStr.WriteText(TextParam, StrLen(TextParam));
+    end;
+
+    procedure WriteAllowOneCharacter(TextParam: Text)
+    var
+    begin
+        if StrLen(TextParam) > 0 then
+            OutStr.WriteText(TextParam, StrLen(TextParam));
+    end;
+
+    procedure Get(VAR TempBlobParam: Record TempBlobExten)
+    var
+    begin
+        TempBlobParam := Tempblob;
+    end;
+
+    procedure Read(VAR ReturnText: BigText; VAR BlobToRead: Record TempBlobExten)
+    var
+    begin
+        TempText := '';
+        BlobToRead.Blob.CreateInStream(InStr);
+        while not InStr.EOS do begin
+            InStr.ReadText(TempText, 1024);
+            ReturnText.AddText(TempText);
+        end;
+    end;
+
+}
+codeunit 50110 ItemTracking
+{
+    trigger OnRun()
+    begin
+
+    end;
+
+    var
+        TempGlobalReservEntry: Record "Reservation Entry" temporary;
+        TempGlobalEntrySummary: Record "Entry Summary" temporary;
+        CurrBinCode: Code[20];
+        CurrItemTrackingCode: Record "Item Tracking Code";
+        TempGlobalTrackingSpec: Record "Tracking Specification";
+        LastSummaryEntryNo: Integer;
+
+
+    procedure AssistEditTrackingBP(var TempTrackingSpecification: Record "Tracking Specification" temporary; var CantidadDisponible: Decimal)
+    var
+
+
+    begin
+
+        RetrieveLookupDataBP(TempTrackingSpecification, true);
+
+        TempGlobalReservEntry.RESET;
+        TempGlobalEntrySummary.RESET;
+
+        TempGlobalEntrySummary.SETCURRENTKEY("Lot No.", "Serial No.");
+        TempGlobalEntrySummary.SETRANGE("Serial No.", '');
+
+        TempGlobalEntrySummary.SETRANGE("Lot No.", TempTrackingSpecification."Lot No.");
+        if TempGlobalEntrySummary.FindFirst() then
+            CantidadDisponible := TempGlobalEntrySummary."Total Available Quantity";
+
+
+    end;
+
+    procedure RetrieveLookupDataBP(var TrackingSpecification: Record "Tracking Specification" temporary; FullDataSet: Boolean)
+    var
+        ItemLedgEntry: Record "Item Ledger Entry";
+        ReservEntry: Record "Reservation Entry";
+        TempReservEntry: Record "Reservation Entry" temporary;
+        xTrackingSpecification: Record "Tracking Specification";
+        LastSummaryEntryNo: Integer;
+        LastReservEntryNo: Integer;
+
+    begin
+        LastSummaryEntryNo := 0;
+        LastReservEntryNo := 0;
+        xTrackingSpecification := TrackingSpecification;
+        TempGlobalReservEntry.Reset();
+        TempGlobalReservEntry.DeleteAll();
+        TempGlobalEntrySummary.Reset();
+        TempGlobalEntrySummary.DeleteAll();
+
+        ReservEntry.Reset();
+
+        if ReservEntry.FindLast() then
+            LastReservEntryNo := ReservEntry."Entry No.";
+        ReservEntry.SetCurrentKey("Item No.", "Variant Code", "Location Code", "Item Tracking", "Reservation Status", "Lot No.", "Serial No.");
+        ReservEntry.SETRANGE("Item No.", TrackingSpecification."Item No.");
+        ReservEntry.SETRANGE("Variant Code", TrackingSpecification."Variant Code");
+        ReservEntry.SETRANGE("Location Code", TrackingSpecification."Location Code");
+        ReservEntry.SETFILTER("Item Tracking", '<>%1', ReservEntry."Item Tracking"::None);
+        ReservEntry.SETRANGE("Lot No.", TrackingSpecification."Lot No.");
+
+        IF ReservEntry.FINDSET THEN
+            REPEAT
+                TempReservEntry := ReservEntry;
+                IF CanIncludeReservEntryToTrackingSpec(TempReservEntry) THEN begin
+                    //TempReservEntry."Entry No." := TempReservEntry."Entry No." + 1; /////+++++++++++++++++++++++ se añadio por que no lo revisaba 
+                    TempReservEntry.INSERT;//////////////////////////////////////////////////////////////-----------REVISA
+                end;
+
+            UNTIL ReservEntry.NEXT = 0;
+
+        ItemLedgEntry.RESET;
+        ItemLedgEntry.SETCURRENTKEY("Item No.", Open, "Variant Code", "Location Code", "Item Tracking",
+          "Lot No.", "Serial No.");
+        ItemLedgEntry.SETRANGE("Item No.", TrackingSpecification."Item No.");
+        ItemLedgEntry.SETRANGE("Variant Code", TrackingSpecification."Variant Code");
+        ItemLedgEntry.SETRANGE(Open, TRUE);
+        ItemLedgEntry.SETRANGE("Location Code", TrackingSpecification."Location Code");
+        ItemLedgEntry.SETRANGE("Lot No.", TrackingSpecification."Lot No.");
+
+        TransferReservEntryToTempRec(TempReservEntry, TrackingSpecification);
+        TransferItemLedgToTempRec(ItemLedgEntry, TrackingSpecification);
+
+        TempGlobalEntrySummary.RESET;
+    end;
+
+
+    local procedure CanIncludeReservEntryToTrackingSpec(TempReservEntry: Record "Reservation Entry" temporary): Boolean
+    var
+        SalesLine: Record "Sales Line";
+    begin
+        with TempReservEntry do
+            if ("Reservation Status" = "Reservation Status"::Prospect) and ("Source Type" = Database::"Sales Line") and ("Source Type" = 2)
+            then begin
+                SalesLine.Get("Source Subtype", "Source ID", "Source Ref. No.");
+                if SalesLine."Shipment No." <> '' then
+                    exit(false);
+            end;
+        exit(true);
+    end;
+
+    local procedure TransferReservEntryToTempRec(var TempReservEntry: Record "Reservation Entry" temporary; var TrackingSpecification: Record "Tracking Specification" temporary)
+    var
+        myInt: Integer;
+    begin
+
+        IF TempReservEntry.FINDSET THEN
+            REPEAT
+                TempGlobalReservEntry := TempReservEntry;
+                TempGlobalReservEntry."Transferred from Entry No." := 0;
+                IF TempGlobalReservEntry.INSERT THEN
+                    CreateEntrySummary(TrackingSpecification, TempGlobalReservEntry);
+            UNTIL TempReservEntry.NEXT = 0;
+    end;
+
+    local procedure CreateEntrySummary(TrackingSpecification: Record "Tracking Specification" temporary; TempReservEntry: Record "Reservation Entry" temporary)
+    var
+    //LookupMode: Option OptionString{ 0,1,2} 0,1,2];
+
+    begin
+
+        CreateEntrySummary2(TrackingSpecification, 0, TempReservEntry);
+        CreateEntrySummary2(TrackingSpecification, 1, TempReservEntry);
+    end;
+
+    local procedure CreateEntrySummary2(TrackingSpecification: Record "Tracking Specification" temporary; LookupMode: Option "Serial No.","Lot No."; TempReservEntry: Record "Reservation Entry" temporary)
+    var
+        DoInsert: Boolean;
+    begin
+        TempGlobalEntrySummary.RESET;
+        TempGlobalEntrySummary.SETCURRENTKEY("Lot No.", "Serial No.");
+
+        // Set filters
+        CASE LookupMode OF
+            LookupMode::"Serial No.":
+                BEGIN
+                    IF TempReservEntry."Serial No." = '' THEN
+                        EXIT;
+                    TempGlobalEntrySummary.SetTrackingFilterFromReservEntry(TempReservEntry);
+                END;
+            LookupMode::"Lot No.":
+                BEGIN
+                    TempGlobalEntrySummary.SetTrackingFilter('', TempReservEntry."Lot No.");
+                    IF TempReservEntry."Serial No." <> '' THEN
+                        TempGlobalEntrySummary.SETRANGE("Table ID", 0)
+                    ELSE
+                        TempGlobalEntrySummary.SETFILTER("Table ID", '<>%1', 0);
+                END;
+        END;
+
+        // If no summary exists, create new record
+        IF NOT TempGlobalEntrySummary.FINDFIRST THEN BEGIN
+            TempGlobalEntrySummary.INIT;
+            TempGlobalEntrySummary."Entry No." := LastSummaryEntryNo + 1;             ////////Aumento 
+            LastSummaryEntryNo := TempGlobalEntrySummary."Entry No.";
+
+            IF (LookupMode = LookupMode::"Lot No.") AND (TempReservEntry."Serial No." <> '') THEN
+                TempGlobalEntrySummary."Table ID" := 0 // Mark as summation
+            ELSE
+                TempGlobalEntrySummary."Table ID" := TempReservEntry."Source Type";
+            IF LookupMode = LookupMode::"Serial No." THEN
+                TempGlobalEntrySummary."Serial No." := TempReservEntry."Serial No."
+            ELSE
+                TempGlobalEntrySummary."Serial No." := '';
+            TempGlobalEntrySummary."Lot No." := TempReservEntry."Lot No.";
+            TempGlobalEntrySummary."Bin Active" := CurrBinCode <> '';
+            UpdateBinContent(TempGlobalEntrySummary);
+
+            // If consumption/output fill in double entry value here:
+            TempGlobalEntrySummary."Double-entry Adjustment" :=
+              MaxDoubleEntryAdjustQty(TrackingSpecification, TempGlobalEntrySummary);
+
+            DoInsert := TRUE;
+        END;
+
+        // Sum up values
+        IF TempReservEntry.Positive THEN BEGIN
+            TempGlobalEntrySummary."Warranty Date" := TempReservEntry."Warranty Date";
+            TempGlobalEntrySummary."Expiration Date" := TempReservEntry."Expiration Date";
+            IF TempReservEntry."Entry No." < 0 THEN // The record represents an Item ledger entry
+                TempGlobalEntrySummary."Total Quantity" += TempReservEntry."Quantity (Base)";
+            IF TempReservEntry."Reservation Status" = TempReservEntry."Reservation Status"::Reservation THEN
+                TempGlobalEntrySummary."Total Reserved Quantity" += TempReservEntry."Quantity (Base)";
+        END ELSE BEGIN
+            TempGlobalEntrySummary."Total Requested Quantity" -= TempReservEntry."Quantity (Base)";
+            IF TempReservEntry.HasSamePointerWithSpec(TrackingSpecification) THEN BEGIN
+                IF TempReservEntry."Reservation Status" = TempReservEntry."Reservation Status"::Reservation THEN
+                    TempGlobalEntrySummary."Current Reserved Quantity" -= TempReservEntry."Quantity (Base)";
+                IF TempReservEntry."Entry No." > 0 THEN // The record represents a reservation entry
+                    TempGlobalEntrySummary."Current Requested Quantity" -= TempReservEntry."Quantity (Base)";
+            END;
+        END;
+
+        // Update available quantity on the record
+        TempGlobalEntrySummary.UpdateAvailable;
+        IF DoInsert THEN
+            TempGlobalEntrySummary.INSERT
+        ELSE
+            TempGlobalEntrySummary.MODIFY;
+    end;
+
+    local procedure TransferItemLedgToTempRec(var ItemLedgEntry: Record "Item Ledger Entry"; var TrackingSpecification: Record "Tracking Specification" temporary)
+    var
+        myInt: Integer;
+    begin
+        IF ItemLedgEntry.FINDSET THEN
+            REPEAT
+                IF ItemLedgEntry.TrackingExists THEN BEGIN
+                    TempGlobalReservEntry.INIT;
+                    TempGlobalReservEntry."Entry No." := -ItemLedgEntry."Entry No.";
+                    TempGlobalReservEntry."Reservation Status" := TempGlobalReservEntry."Reservation Status"::Surplus;
+                    TempGlobalReservEntry.Positive := ItemLedgEntry.Positive;
+                    TempGlobalReservEntry."Item No." := ItemLedgEntry."Item No.";
+                    TempGlobalReservEntry."Location Code" := ItemLedgEntry."Location Code";
+                    TempGlobalReservEntry."Quantity (Base)" := ItemLedgEntry."Remaining Quantity";
+                    TempGlobalReservEntry."Source Type" := DATABASE::"Item Ledger Entry";
+                    TempGlobalReservEntry."Source Ref. No." := ItemLedgEntry."Entry No.";
+                    TempGlobalReservEntry."Serial No." := ItemLedgEntry."Serial No.";
+                    TempGlobalReservEntry."Lot No." := ItemLedgEntry."Lot No.";
+                    TempGlobalReservEntry."Variant Code" := ItemLedgEntry."Variant Code";
+
+                    IF TempGlobalReservEntry.Positive THEN BEGIN
+                        TempGlobalReservEntry."Warranty Date" := ItemLedgEntry."Warranty Date";
+                        TempGlobalReservEntry."Expiration Date" := ItemLedgEntry."Expiration Date";
+                        TempGlobalReservEntry."Expected Receipt Date" := 0D
+                    END ELSE
+                        TempGlobalReservEntry."Shipment Date" := DMY2DATE(31, 12, 9999);
+
+                    IF TempGlobalReservEntry.INSERT THEN
+                        CreateEntrySummary(TrackingSpecification, TempGlobalReservEntry);    /////Revisarrrrrr......................
+                END;
+            UNTIL ItemLedgEntry.NEXT = 0;
+    end;
+
+    local procedure UpdateBinContent(var TempEntrySummary: Record "Entry Summary" temporary)
+    var
+        WarehouseEntry: Record "Warehouse Entry";
+    begin
+        IF CurrBinCode = '' THEN
+            EXIT;
+        CurrItemTrackingCode.TESTFIELD(Code);
+        WarehouseEntry.RESET;
+        WarehouseEntry.SETCURRENTKEY(
+          "Item No.", "Bin Code", "Location Code", "Variant Code",
+          "Unit of Measure Code", "Lot No.", "Serial No.");
+        WarehouseEntry.SETRANGE("Item No.", TempGlobalReservEntry."Item No.");
+        WarehouseEntry.SETRANGE("Bin Code", CurrBinCode);
+        WarehouseEntry.SETRANGE("Location Code", TempGlobalReservEntry."Location Code");
+        WarehouseEntry.SETRANGE("Variant Code", TempGlobalReservEntry."Variant Code");
+        IF CurrItemTrackingCode."SN Warehouse Tracking" THEN
+            IF TempEntrySummary."Serial No." <> '' THEN
+                WarehouseEntry.SETRANGE("Serial No.", TempEntrySummary."Serial No.");
+        IF CurrItemTrackingCode."Lot Warehouse Tracking" THEN
+            IF TempEntrySummary."Lot No." <> '' THEN
+                WarehouseEntry.SETRANGE("Lot No.", TempEntrySummary."Lot No.");
+        WarehouseEntry.CALCSUMS("Qty. (Base)");
+
+        TempEntrySummary."Bin Content" := WarehouseEntry."Qty. (Base)";
+    end;
+
+    local procedure MaxDoubleEntryAdjustQty(var TempItemTrackLineChanged: Record "Tracking Specification" temporary; var ChangedEntrySummary: Record "Entry Summary" temporary): Decimal
+    var
+        ItemJnlLine: Record "Item Journal Line";
+    begin
+        IF NOT (TempItemTrackLineChanged."Source Type" = DATABASE::"Item Journal Line") THEN
+            EXIT;
+
+        IF NOT (TempItemTrackLineChanged."Source Subtype" IN [5, 6]) THEN
+            EXIT;
+
+        IF NOT ItemJnlLine.GET(TempItemTrackLineChanged."Source ID",
+             TempItemTrackLineChanged."Source Batch Name", TempItemTrackLineChanged."Source Ref. No.")
+        THEN
+            EXIT;
+
+        TempGlobalTrackingSpec.RESET;
+
+        IF FindRelatedParentTrkgSpec(ItemJnlLine, TempGlobalTrackingSpec,
+             ChangedEntrySummary."Serial No.", ChangedEntrySummary."Lot No.")
+        THEN
+            EXIT(-TempGlobalTrackingSpec."Quantity (Base)" - TempGlobalTrackingSpec."Buffer Value2");
+
+    end;
+
+    local procedure FindRelatedParentTrkgSpec(ItemJnlLine: Record "Item Journal Line"; var TempTrackingSpecification: Record "Tracking Specification" temporary; SerialNo: Code[20]; LotNo: Code[20]): Boolean
+    var
+        myInt: Integer;
+    begin
+        ItemJnlLine.TESTFIELD("Order Type", ItemJnlLine."Order Type"::Production);
+        TempTrackingSpecification.RESET;
+        CASE ItemJnlLine."Entry Type" OF
+            ItemJnlLine."Entry Type"::Consumption:
+                BEGIN
+                    IF ItemJnlLine."Prod. Order Comp. Line No." = 0 THEN
+                        EXIT;
+                    TempTrackingSpecification.SetSourceFilter(
+                      DATABASE::"Prod. Order Component", 3, ItemJnlLine."Order No.", ItemJnlLine."Prod. Order Comp. Line No.", FALSE);
+                    //TempTrackingSpecification.SetSourceFilter2('', ItemJnlLine."Order Line No.");
+                END;
+            ItemJnlLine."Entry Type"::Output:
+                BEGIN
+                    TempTrackingSpecification.SetSourceFilter(DATABASE::"Prod. Order Line", 3, ItemJnlLine."Order No.", -1, FALSE);
+                    //TempTrackingSpecification.SetSourceFilter2('', ItemJnlLine."Order Line No.");
+                END;
+        END;
+        TempTrackingSpecification.SetTrackingFilter(SerialNo, LotNo);
+        EXIT(TempTrackingSpecification.FINDFIRST);
+
+    end;
+}
+codeunit 50111 suscripcion
+{
+
+    [EventSubscriber(ObjectType::Page, page::"Document Attachment Factbox", 'OnBeforeDrillDown', '', false, false)]
+    local procedure MyProcedure(DocumentAttachment: Record "Document Attachment"; var RecRef: RecordRef)
+    var
+        //RecRef: RecordRef;
+        histGestionEnvios: Record HistGestionEmbarqueHeader;
+        DocumentAttachmentDetails: Page "Document Attachment Details";
+
+
+    begin
+        Message('entro a la subscripción %1 ', RecRef);
+        case 50103 of
+            Database::HistGestionEmbarqueHeader:
+                begin
+                    RecRef.Open(DATABASE::HistGestionEmbarqueHeader);
+                    if histGestionEnvios.Get(DocumentAttachment."No.") then
+                        RecRef.GetTable(histGestionEnvios);
+
+                end;
+            else
+                DocumentAttachmentDetails.OpenForRecRef(RecRef);
+                DocumentAttachmentDetails.RunModal;
+        end;
+    end;
+
+    /*[EventSubscriber(ObjectType::Page, page::"Document Attachment Details", 'OnAfterOpenForRecRef', '', true, true)]
+    local procedure MyProcedure2(var DocumentAttachment: Record "Document Attachment"; var RecRef: RecordRef)
+    var
+        tabDocumentAttachement: Record "Document Attachment";
+
+        FileManagement: Codeunit "File Management";
+    begin
+
+        Message('entraste a los  detalles %1   valor  de  doocument attachment %2', RecRef.Number, DocumentAttachment."No.");
+
+        tabDocumentAttachement.SetRange("Table ID", RecRef.Number);
+        if tabDocumentAttachement.FindFirst() then begin
+            repeat
+                Message('valores de la tabla %1   ID %2,  No %3 , valor a cambiar en este punto es %4', tabDocumentAttachement."Table ID", tabDocumentAttachement.ID, tabDocumentAttachement."No.", DocumentAttachment."No.");
+            //tabDocumentAttachement."No." := DocumentAttachment."No.";
+
+            until tabDocumentAttachement.Next() = 0;
+
+        end;
+    end;*/
+}
+codeunit 50115 SalesInfoPaneMgtExten
+{
+    trigger OnRun()
+    begin
+
+    end;
+
+    var
+        Item: Record Item;
+        AvailableToPromise: Codeunit "Available to Promise";
+        AllFieldCalculated: Boolean;
+        PrevItemNo: Code[20];
+        PrevItemFilters: Text;
+        UOMMgt: Codeunit "Unit of Measure Management";
+        BoleanoAux: Boolean;
+        cantidadRecuperada: Boolean;
+        valorlinea: Integer;
+        accesa: Boolean;
+
+    procedure CalcReservedDemandExten(SalesLine: Record "Sales Line"): Decimal
+    begin
+        if GetItem(SalesLine) then begin
+            SetItemFilter(Item, SalesLine);
+
+            exit(
+              ConvertQty(
+                CalcReservedRequirement(Item),
+                SalesLine."Qty. per Unit of Measure"));
+        end;
+    end;
+
+    local procedure GetItem(var SalesLine: Record "Sales Line"): Boolean
+    begin
+        with Item do begin
+            if (SalesLine.Type <> SalesLine.Type::Item) or (SalesLine."No." = '') then
+                exit(false);
+
+            if SalesLine."No." <> "No." then
+                Get(SalesLine."No.");
+            exit(true);
+        end;
+    end;
+
+    local procedure SetItemFilter(var Item: Record Item; var SalesLine: Record "Sales Line")
+    begin
+        Item.Reset;
+
+        Item.SetRange("Variant Filter", SalesLine."Variant Code");/// es necesario el codigo de variante
+        Item.SetRange("Location Filter", SalesLine."Location Code");
+        Item.SetRange("Drop Shipment Filter", SalesLine."Drop Shipment");
+        ///OnAfterSetItemFilter(Item, SalesLine); Evento de Integración 
+    end;
+
+    local procedure CalcAvailabilityDate(var SalesLine: Record "Sales Line"): Date   ////   aqui  cambie la funcion a solo local 
+    begin
+        if SalesLine."Shipment Date" <> 0D then
+            exit(SalesLine."Shipment Date");
+
+        exit(WorkDate);
+    end;
+
+    local procedure ConvertQty(Qty: Decimal; PerUoMQty: Decimal): Decimal
+    begin
+        if PerUoMQty = 0 then
+            PerUoMQty := 1;
+        exit(Round(Qty / PerUoMQty, UOMMgt.QtyRndPrecision));
+    end;
+
+    ////////////////segundo codeunit
+    local procedure CalcReservedRequirement(var Item: Record Item) ReservedRequirement: Decimal
+    begin
+        CalcAllItemFields(Item);
+        with Item do begin
+            ReservedRequirement :=
+              "Res. Qty. on Prod. Order Comp." +
+              ReservedQtyOnSalesOrderSurplus +
+              //"Reserved Qty. on Sales Orders" + //aqui cambiamos la rutina
+              "Res. Qty. on Service Orders" +
+              "Res. Qty. on Job Order" +
+              "Res. Qty. on Outbound Transfer" +
+              "Res. Qty. on  Asm. Comp." +
+              "Res. Qty. on Purch. Returns";
+
+            //OnAfterCalcReservedRequirement(Item, ReservedRequirement); Evento 
+
+            exit(ReservedRequirement);
+        end;
+    end;
+
+    local procedure CalcAllItemFields(var Item: Record Item)
+    begin
+        //AllFieldCalculated := false;///anadido para que no se brinque
+        //if AllFieldCalculated and (PrevItemNo = Item."No.") and (PrevItemFilters = Item.GetFilters) then
+        if AllFieldCalculated and (PrevItemNo = Item."No.") and (PrevItemFilters = Item.GetFilters) and (BoleanoAux = false) then
+            exit;
+
+        Item.CalcFields(
+          Inventory, "Reserved Qty. on Inventory",
+          "Scheduled Need (Qty.)",
+          "Planning Issues (Qty.)",
+          "Planning Transfer Ship. (Qty).",
+          "Qty. on Sales Order",
+          "Qty. on Service Order",
+          "Qty. on Job Order",
+          "Trans. Ord. Shipment (Qty.)",
+          "Qty. on Asm. Component",
+          "Qty. on Purch. Return",
+          "Res. Qty. on Prod. Order Comp.",
+          "Reserved Qty. on Sales Orders",
+          "Res. Qty. on Service Orders",
+          "Res. Qty. on Job Order",
+          "Res. Qty. on Outbound Transfer",
+          "Res. Qty. on  Asm. Comp.",
+          "Res. Qty. on Purch. Returns");
+
+        // Max function parameters is 20, hence split in 2
+        Item.CalcFields(
+          "Scheduled Receipt (Qty.)",
+          "Planned Order Receipt (Qty.)",
+          "Qty. on Purch. Order",
+          "Trans. Ord. Receipt (Qty.)",
+          "Qty. in Transit",
+          "Qty. on Assembly Order",
+          "Qty. on Sales Return",
+          "Reserved Qty. on Purch. Orders",
+          "Res. Qty. on Inbound Transfer",
+          "Res. Qty. on Assembly Order",
+          "Res. Qty. on Sales Returns",
+          "ReservedQtyOnSalesOrderSurplus");
+
+        //Message('dame un valor %1', Item.ReservedQtyOnSalesOrderSurplus);
+
+        AllFieldCalculated := true;
+        PrevItemNo := Item."No.";
+        PrevItemFilters := Item.GetFilters;
+        BoleanoAux := true;
+    end;
+
+    procedure DetenSalesFactBox(var vandera: Boolean)
+    var
+        myInt: Integer;
+    begin
+        BoleanoAux := vandera;
+    end;
+
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //Apartado Segundo proceso para caolculo por linea
+    procedure CalcReservaDemandLine(SalesLine: Record "Sales Line"): Decimal
+    var
+
+    begin
+
+        if (accesa = true) and (cantidadRecuperada = true) and (valorlinea = SalesLine."Line No.") then
+            exit;
+
+        Valorlinea := BuscaValorLinea(SalesLine);
+        accesa := true;
+
+        exit(Valorlinea);
+
+
+    end;
+
+    local procedure SetItemFilterLine(var Item: Record Item; var SalesLine: Record "Sales Line")
+    begin
+        Item.Reset;
+        Item.SetRange("Variant Filter", SalesLine."Variant Code");/// es necesario el codigo de variante
+        Item.SetRange("Location Filter", SalesLine."Location Code");
+        Item.SetRange("Drop Shipment Filter", SalesLine."Drop Shipment");
+        ///OnAfterSetItemFilter(Item, SalesLine); Evento de Integración 
+    end;
+
+    local procedure BuscaValorLinea(SalesLine: Record "Sales Line") ReservedRequirement2: Decimal
+    var
+        reservationEntry: Record "Reservation Entry";
+
+    begin
+        if ((cantidadRecuperada = true) and (valorlinea = SalesLine."Line No.")) then
+            exit;
+        reservationEntry.SetRange("Source ID", SalesLine."Document No.");
+        reservationEntry.SetRange("Source Ref. No.", SalesLine."Line No.");
+        reservationEntry.SetRange("Source Type", 37);
+        reservationEntry.SetRange("Item No.", SalesLine."No.");
+        reservationEntry.SetRange("Source Subtype", SalesLine."Document Type"::Order);
+        if reservationEntry.FindSet() then begin
+            valorlinea := SalesLine."Line No.";
+            cantidadRecuperada := true;
+            repeat
+
+                ReservedRequirement2 := ReservedRequirement2 + ((-1) * reservationEntry."Quantity (Base)");
+
+            until reservationEntry.Next() = 0;
+            exit(ReservedRequirement2);
+        end;
+    end;
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+}
+
+codeunit 50116 ActivitiesMgtExten   /// Code unit Para abrir las paginas Foltradas de cada Cue.
+{
+    procedure DrillDownSalesThisMonthCDMX()
+    var
+        CustLedgerEntry: Record "Cust. Ledger Entry";
+    begin
+        CustLedgerEntry.SetFilter("Document Type", '%1|%2',
+          CustLedgerEntry."Document Type"::Invoice, CustLedgerEntry."Document Type"::"Credit Memo");
+        CustLedgerEntry.SetRange("Posting Date", CalcDate('<-CM>', GetDefaultWorkDate), GetDefaultWorkDate);
+        CustLedgerEntry.SetFilter("Global Dimension 1 Code", '01CDMX|01CPA|01CPS'); /// Filtro PARA CDMX
+        PAGE.Run(PAGE::"Customer Ledger Entries", CustLedgerEntry);
+    end;
+
+    procedure DrillDownSalesThisMonthSMA()
+    var
+        CustLedgerEntry: Record "Cust. Ledger Entry";
+    begin
+        CustLedgerEntry.SetFilter("Document Type", '%1|%2',
+          CustLedgerEntry."Document Type"::Invoice, CustLedgerEntry."Document Type"::"Credit Memo");
+        CustLedgerEntry.SetRange("Posting Date", CalcDate('<-CM>', GetDefaultWorkDate), GetDefaultWorkDate);
+        CustLedgerEntry.SetFilter("Global Dimension 1 Code", '01SMA|01C15');/// Filtro PARA SMA
+        PAGE.Run(PAGE::"Customer Ledger Entries", CustLedgerEntry);
+    end;
+
+    procedure DrillDownSalesThisMonthMTY()
+    var
+        CustLedgerEntry: Record "Cust. Ledger Entry";
+    begin
+        CustLedgerEntry.SetFilter("Document Type", '%1|%2',
+          CustLedgerEntry."Document Type"::Invoice, CustLedgerEntry."Document Type"::"Credit Memo");
+        CustLedgerEntry.SetRange("Posting Date", CalcDate('<-CM>', GetDefaultWorkDate), GetDefaultWorkDate);
+        CustLedgerEntry.SetRange("Global Dimension 1 Code", '01MTY');/// Filtro PARA MTY
+        PAGE.Run(PAGE::"Customer Ledger Entries", CustLedgerEntry);
+    end;
+
+    procedure DrillDownSalesThisMonthCAB()
+    var
+        CustLedgerEntry: Record "Cust. Ledger Entry";
+    begin
+        CustLedgerEntry.SetFilter("Document Type", '%1|%2',
+          CustLedgerEntry."Document Type"::Invoice, CustLedgerEntry."Document Type"::"Credit Memo");
+        CustLedgerEntry.SetRange("Posting Date", CalcDate('<-CM>', GetDefaultWorkDate), GetDefaultWorkDate);
+        CustLedgerEntry.SetRange("Global Dimension 1 Code", '01CAB'); /// Filtro PARA CAB
+        PAGE.Run(PAGE::"Customer Ledger Entries", CustLedgerEntry);
+    end;
+
+    local procedure GetDefaultWorkDate(): Date
+    var
+        LogInManagement: Codeunit LogInManagement;
+    begin
+        if DefaultWorkDate = 0D then
+            DefaultWorkDate := LogInManagement.GetDefaultWorkDate;
+        exit(DefaultWorkDate);
+    end;
+
+    var
+        DefaultWorkDate: Date;
+
+}
+codeunit 50117 ModificacionFichaProducto
+{
+    Permissions = TableData 21 = rimd;
+
+    procedure ModificarPrecio(PBANoItem: Code[25]; PBAPrecioItem: Decimal)
+
+    begin
+        /*
+        PBATableItem.SetRange("No.", PBANoItem);
+        if PBATableItem.FindFirst() then begin
+            PBATableItem."Unit Price" := PBAPrecioItem;
+            PBATableItem.Modify();
+        end*/
+    end;
+
+    var
+        PBATableItem: Record Item;
+}
+codeunit 50118 EtiquetaNamuh
+{
+    procedure GenerarVariasEtiquetas(var PBAFromItem: Record Item)
+
+    begin
+
+        repeat
+
+            PBAItemsMarcados := PBAFromItem."No.";
+
+            PBATablaItem.SetRange("No.", PBAItemsMarcados);
+            if PBATablaItem.FindFirst() then
+                Report.RunModal(50117, true, false, PBATablaItem);
+
+        until PBAFromItem.Next = 0;
+
+
+
+    end;
+
+
+
+    var
+        PBATablaItem: Record Item;
+        PBAItemsMarcados: Text;
+
+}
+codeunit 50119 Suscripciones
+{
+    trigger OnRun()
+    begin
+
+    end;
+
+    [EventSubscriber(ObjectType::Table, Database::"Sales Line", 'OnAfterValidateEvent', 'No.', true, true)]
+    local procedure ProcesoValorDolares(var Rec: Record "Sales Line")
+    var
+        TbItem: Record Item;
+        GeneralLedgerSetup: Record "General Ledger Setup";
+        AuxSalesline: Record "Sales Line";
+        SalesHeaderAux: Record "Sales Header";
+        linea: Integer;
+    begin
+        GeneralLedgerSetup.Get();
+        if GeneralLedgerSetup.UsarPrecioDolar = true then begin
+
+            SalesHeaderAux.SetRange("No.", Rec."Document No.");
+            SalesHeaderAux.SetRange("Document Type", SalesHeaderAux."Document Type"::Order);
+            if SalesHeaderAux.FindFirst() then begin
+                TbItem.SetRange("No.", Rec."No.");
+                if TbItem.FindFirst() then begin
+                    if TbItem.PrecioDollar <> 0 then begin
+                        AuxSalesline.SetRange("Document No.", Rec."Document No.");
+                        if AuxSalesline.FindLast() then begin
+                            linea := AuxSalesline."Line No." + 10000;
+                        end else
+                            linea := 10000;
+
+                        if SalesHeaderAux."Currency Code" <> '' then begin
+                            Rec."Line No." := linea;
+                            Rec.PrecioDolar := TbItem.PrecioDolarSinIva;
+                            Rec."Unit Price" := TbItem.PrecioDolarSinIva;
+                            Rec.Validate("Unit Price");
+
+                        end else begin
+                            Rec."Line No." := linea;
+                            Rec.PrecioDolar := TbItem.PrecioDolarSinIva;
+                            Rec."Unit Price" := Round(Rec.PrecioDolar * GeneralLedgerSetup."Tipo de Cambio Dolar", 0.01, '>');
+                            Rec.Validate("Unit Price");
+                        end;
+                    end;
+                end;
+            end;
+        end;
+    end;
+
+
+    [EventSubscriber(ObjectType::Table, Database::"Sales Line", 'OnAfterUpdateUnitPrice', '', true, true)]
+    local procedure OnAfterUpdate(var SalesLine: Record "Sales Line"; xSalesLine: Record "Sales Line"; CalledByFieldNo: Integer; CurrFieldNo: Integer)
+    var
+        GeneralLedgerSetup: Record "General Ledger Setup";
+        TBItem: Record Item;
+    begin
+        GeneralLedgerSetup.Get();
+        if GeneralLedgerSetup.UsarPrecioDolar = true then begin
+            TBItem.SetRange("No.", SalesLine."No.");
+            if TBItem.FindFirst() then begin
+                if TBItem.PrecioDollar <> 0 then begin
+                    SalesLine."Unit Price" := xSalesLine."Unit Price";
+                    SalesLine."Line Amount" := SalesLine."Unit Price" * SalesLine.Quantity;
+                    SalesLine."Amount Including VAT" := (SalesLine."Unit Price" * SalesLine.Quantity) + (SalesLine."Unit Price" * SalesLine.Quantity * 0.16);
+                end;
+            end;
+        end;
+    end;
+
+    var
+        myInt: Integer;
+}

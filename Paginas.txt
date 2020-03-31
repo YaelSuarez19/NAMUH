@@ -1,0 +1,3877 @@
+page 50100 Pizarras
+{
+    PageType = List;
+    ApplicationArea = All;
+    UsageCategory = Administration;
+
+    SourceTable = Pizarra;
+
+    layout
+    {
+        area(Content)
+        {
+            repeater(Pizarras)
+            {
+                field(CodigoP; CodigoP)
+                {
+                    ApplicationArea = All;
+                    Editable = true;
+
+                }
+                field("Descripción Pizarra"; "Descripción")
+                {
+                    ApplicationArea = All;
+                }
+            }
+        }
+    }
+}
+pageextension 50100 addPizarraSalesOrder extends "Sales Order"
+{
+    layout
+    {
+        addafter("External Document No.")
+        {
+            field("N° Pizarra"; "N° Pizarra")
+            {
+                ApplicationArea = All;
+                trigger OnValidate()
+                var
+                    myInt: Integer;
+                begin
+                    if Rec."N° Pizarra" = '' then begin
+                        Message('El campo N° de pizarra debe estar lleno');
+                    end;
+                end;
+            }
+        }
+        addafter(Status)
+        {
+            field("Customer Disc. Group"; "Customer Disc. Group")
+            {
+                ApplicationArea = All;
+            }
+        }
+        modify(Control1901314507)
+        {
+            Visible = false;
+        }
+
+    }
+
+    actions
+    {
+
+    }
+
+}
+pageextension 50101 AddPizarraPostSalesInvHead extends "Posted Sales Invoice"
+{
+    layout
+    {
+        // Add changes to page layout here
+        addafter("External Document No.")
+        {
+            field("N° Pizarra"; "N° Pizarra")
+            {
+                ApplicationArea = All;
+                Editable = false;
+            }
+        }
+        modify(IncomingDocAttachFactBox)
+        {
+            Visible = false;
+        }
+    }
+    ////////////////////////////////////////////////////////////////////////////////Yael
+    actions
+    {
+        addlast(Navigation)
+        {
+            action("Generar Ticket de Venta")
+            {
+                ApplicationArea = All;
+                Image = Answers;
+
+                trigger OnAction()
+                var
+                    ReporteNamuh: Report "Ticket Venta Namuh";
+                    PBASalesInvoiceHeader: Record "Sales Invoice Header";
+                    PBADocumentNo: Code[20];
+                    PBACodigoVendedor: Code[20];
+                    PBACompanyInformation: Record "Company Information";
+                begin
+                    PBACompanyInformation.Get();
+
+                    if PBACompanyInformation."RFC No." = 'NAM991117BE6' then begin
+                        Rec.Reset();
+                        Rec.SetRange("No.", Rec."No.");
+                        if Rec.FindFirst() then;
+                        Report.RunModal(50108, true, false, Rec);
+                    end else begin
+
+                        Rec.Reset();
+                        Rec.SetRange("No.", Rec."No.");
+                        if Rec.FindFirst() then;
+                        Report.RunModal(50118, true, false, Rec);
+
+                    end;
+
+                end;
+
+            }
+
+        }
+    }
+    ///////////////////////////////////////////////////////////////////////////////////
+
+}
+pageextension 50102 addPizarraPostedSalesInvList extends "Posted Sales Invoices"
+{
+
+    layout
+    {
+        addafter("Currency Code")
+        {
+            field("N° Pizarra"; "N° Pizarra")
+            {
+                ApplicationArea = All;
+                Editable = false;
+            }
+            field(Gestionado; Gestionado)
+            {
+                ApplicationArea = All;
+            }
+            field("En Historico"; "En Historico")
+            {
+                ApplicationArea = All;
+            }
+        }
+    }
+    actions
+    {
+        addafter("CFDI Information")
+        {
+            action("Gestion de Envíos")
+            {
+                ApplicationArea = All;
+
+                trigger OnAction()
+                begin
+                    EnviaGestion.TransferFields(Rec);
+                    EnviaGestion."Fecha inicio embarque" := Today;
+                    EnviaGestion.Insert(true);
+                    Message('Los datos fueron enviados a Gestion de Envíos');
+                end;
+            }
+
+        }
+        /*addafter("Export E-Document as &XML")
+        {
+            action("Descarga xml")
+            {
+                ApplicationArea = All;
+
+                trigger OnAction()
+                var
+                    TSalesInvHeader: Record "Sales Invoice Header";
+                    TsalesInvHeader2: Record "Sales Invoice Header";
+                    TempBlobEx: Codeunit "Temp Blob"; // Record TempBlobExten;
+                    FileManagement: Codeunit "File Management";
+                    pPostedSalesInvoice: Page "Posted Sales Invoices";
+                    NvoNo: Code[20];
+                    filevar: File;
+                    //purchHeader: Record "Purchase Header";
+                    ZipBlob: Record TempBlobExten temporary;
+                    ZipStream: InStream;
+                    ZipName: Text;
+                begin
+                    ZipName := 'XMLs.zip';
+
+                    TSalesInvHeader.SetRange("Electronic Document Status", TSalesInvHeader."Electronic Document Status"::"Stamp Received");
+                    //if (TSalesInvHeader."Electronic Document Status" = TSalesInvHeader."Electronic Document Status"::"Stamp Received") or (TSalesInvHeader."Electronic Document Status" = TSalesInvHeader."Electronic Document Status"::Sent)
+                    if TSalesInvHeader.FindSet() then begin
+                        repeat
+                            NvoNo := TSalesInvHeader."No.";
+                            //auxiliar 2
+                            TsalesInvHeader2.SetRange("No.", NvoNo);
+                            if TsalesInvHeader2.FindFirst() then begin
+                                // Message('entro');
+                                TsalesInvHeader2.CalcFields("Signed Document XML");
+                                //CalcFields(TsalesInvHeader2."Signed Document XML");
+                                if TsalesInvHeader2."Signed Document XML".HasValue then begin
+                                    TempBlobEx.FromRecord(TsalesInvHeader2, 10025); /// aqui es con la nueva estructura Version 15 
+                                                                                    //   Message('muestrame que valores toma %1', NvoNo);
+                                    FileManagement.BLOBExport(TempBlobEx, NvoNo + '.xml', true);
+
+                                    // Message(' Save  xml');
+                                    // DownloadFromStream()
+
+                                    ZipBlob.Blob.CreateInStream(ZipStream);
+                                end;
+
+                            end;
+
+                        until TSalesInvHeader.Next() = 0;
+
+
+                        //Descargaxml_s();
+                    end;
+                    DownloadFromStream(ZipStream, 'Dialog', 'Folder', '', ZipName);
+                    //OpenAttachment(2);
+
+                end;
+            }
+           
+        }*/
+    }
+    var
+        EnviaGestion: Record GestionEmbarqueHeader;
+
+    local procedure Descargaxml_s()
+    var
+        ZipedFile: OutStream;
+        FileName: array[4] of Text;
+        FileContent: array[4] of BigText;
+        ZipName: Text;
+        FileMgt: Codeunit "File Management";
+        FileBlob: Record TempBlobExten temporary;
+        ZipBlob: Record TempBlobExten temporary;
+        FileStream: InStream;
+        ZipStream: InStream;
+        i: Integer;
+        TempFile: File; //// nuevo 
+        Attachment: Record Attachment;
+    //FillFiles: Report "Fill Files";
+    begin
+        FileBlob.Blob.CreateInStream(FileStream);
+        ZipBlob.Blob.CreateOutStream(ZipedFile);
+        ZipName := 'XMLs.zip';// StrSubstNo('%1.zip', "Archive Name");
+
+        //FillFiles.RunModal();
+        // FillFiles.GetFileContent(FileName, FileContent);
+        //for i := 1 to ArrayLen(FileContent) do begin
+        //  FileBlob.WriteAsText(Format(FileContent[i]), TextEncoding::UTF8);
+        //FileMgt.AddStreamToZipStream(ZipedFile, FileStream, FileName[i]);
+        //end;
+
+        ZipBlob.Blob.CreateInStream(ZipStream);
+
+        DownloadFromStream(ZipStream, 'Dialog', 'Folder', '', ZipName);
+        Message('Termino de descargar el archivo');
+    end;
+
+    procedure OpenAttachment(pFileAttachmentEntryNo: Integer)
+    var
+        AttachmentRec: record Attachment;
+        ResponseStream: InStream;
+        tempfilename: text;
+        ErrorAttachment: Label 'No file available.';
+    begin
+        if AttachmentRec.get(pFileAttachmentEntryNo) then
+            if AttachmentRec."Attachment File".HasValue then begin
+                AttachmentRec.CalcFields("Attachment File");
+                AttachmentRec."Attachment File".CreateInStream(ResponseStream);
+                tempfilename := CreateGuid() + '.' + AttachmentRec."File Extension";
+                DOWNLOADFROMSTREAM(ResponseStream, 'Export', '', 'All Files (*.*)|*.*', tempfilename);
+            end
+            else
+                Error(ErrorAttachment);
+    end;
+
+    procedure UploadAttachment()
+    var
+        AttachmentRec: Record Attachment;
+        FileOutStream: OutStream;
+        FileInStream: InStream;
+        tempfilename: text;
+        DialogTitle: Label 'Please select a File...';
+    begin
+        if UploadIntoStream(DialogTitle, '', 'All Files (*.*)|*.*', tempfilename, FileInStream) then begin
+
+            AttachmentRec.Init();
+            AttachmentRec.Insert(true);
+            AttachmentRec."Storage Type" := AttachmentRec."Storage Type"::Embedded;
+            AttachmentRec."Storage Pointer" := '';
+            AttachmentRec."File Extension" := GetFileType(tempfilename);
+            AttachmentRec."Attachment File".CreateOutStream(FileOutStream);
+            CopyStream(FileOutStream, FileInStream);
+            AttachmentRec.Modify(true);
+
+        end;
+    end;
+
+    local procedure GetFileType(pFilename: Text): Text;
+    var
+        FilenamePos: Integer;
+    begin
+        FilenamePos := StrLen(pFilename);
+        while (pFilename[FilenamePos] <> '.') or (FilenamePos < 1) do
+            FilenamePos -= 1;
+
+        if FilenamePos = 0 then
+            exit('');
+
+        exit(CopyStr(pFilename, FilenamePos + 1, StrLen(pFilename)));
+    end;
+
+
+}
+////////////////////////////////////////////////////////////////////////////
+pageextension 50103 "PBAPage Pedidos" extends "Transfer Order"
+{
+
+    layout
+    {
+
+        addlast(General)
+        {
+
+
+            field("Escaneo Producto"; "Escaneo Producto")
+            {
+                ApplicationArea = All;
+                Editable = Permitir;
+
+                trigger OnValidate()
+
+                var
+                    myInt: Integer;
+                    PBATablaTransferenciaHeder: Record "Transfer Header";
+                    PBATablaTransferenciaLine: Record "Transfer Line";
+                    PBAProducto: Code[20];
+                    PBADocumentNo: Code[20];
+                    Banderaso: Boolean;
+                    editar: Boolean;
+                begin
+
+                    //PBATablaTransferenciaHeder.SetRange();
+
+                    PBATablaTransferenciaHeder.SetRange("No.", "No.");
+                    if PBATablaTransferenciaHeder.FindFirst() then begin
+                        PBAProducto := Rec."Escaneo Producto";
+                        PBADocumentNo := Rec."No.";
+
+
+                        //Clear(Banderaso);
+                        if PBATablaTransferenciaHeder."Enviar a:" = PBATablaTransferenciaHeder."Enviar a:"::Cantidad_a_enviar then begin
+                            PBATablaTransferenciaLine.SetRange("Document No.", PBADocumentNo);
+                            PBATablaTransferenciaLine.SetRange("Item No.", PBAProducto);
+                            if PBATablaTransferenciaLine.FindFirst() then
+                                repeat
+                                    if PBATablaTransferenciaLine.Quantity > PBATablaTransferenciaLine."Qty. to Ship" + PBATablaTransferenciaLine."Qty. to Receive" then begin
+
+                                        PBATablaTransferenciaLine.Validate("Qty. to Ship", PBATablaTransferenciaLine."Qty. to Ship" + 1);
+                                        PBATablaTransferenciaLine.Modify();
+                                        Clear("Escaneo Producto");
+                                        exit
+                                    end;
+
+                                until (PBATablaTransferenciaLine.Next() = 0);
+
+                            repeat
+                                if PBATablaTransferenciaLine.Quantity > PBATablaTransferenciaLine."Qty. to Ship" then begin
+                                    Banderaso := false;
+                                    PBATablaTransferenciaLine.Validate("Qty. to Ship", PBATablaTransferenciaLine."Qty. to Ship" + 1);
+                                    PBATablaTransferenciaLine.Modify();
+                                    Clear("Escaneo Producto");
+                                    exit
+                                end;
+
+                            until (PBATablaTransferenciaLine.Next() = 0);
+
+                            //Message('Si existe Codigo en las Lineas,%1', PBATablaTransferenciaLine."Item No.");
+                            PBATablaTransferenciaLine.VALIDATE("Qty. to Ship", PBATablaTransferenciaLine."Qty. to Ship" + 1);
+                            PBATablaTransferenciaLine.Modify();
+                            Clear("Escaneo Producto");
+                            exit
+                        end;
+
+                        if PBATablaTransferenciaHeder."Enviar a:" = PBATablaTransferenciaHeder."Enviar a:"::Cantidad_a_Recibir then begin
+                            PBATablaTransferenciaLine.SetRange("Document No.", PBADocumentNo);
+                            PBATablaTransferenciaLine.SetRange("Item No.", PBAProducto);
+                            if PBATablaTransferenciaLine.FindFirst() then begin
+
+                                repeat
+                                    if PBATablaTransferenciaLine."Quantity Shipped" > PBATablaTransferenciaLine."Quantity Received" + PBATablaTransferenciaLine."Qty. to Receive" then begin
+                                        PBATablaTransferenciaLine.Validate("Qty. to Receive", PBATablaTransferenciaLine."Qty. to Receive" + 1);
+                                        PBATablaTransferenciaLine.Modify();
+                                        Clear("Escaneo Producto");
+                                        exit
+                                    end;
+                                until (PBATablaTransferenciaLine.Next() = 0);
+
+                                repeat
+                                    if PBATablaTransferenciaLine."Quantity Shipped" > PBATablaTransferenciaLine."Qty. to Receive" then begin
+                                        Banderaso := false;
+
+                                        PBATablaTransferenciaLine.Validate("Qty. to Receive", PBATablaTransferenciaLine."Qty. to Receive" + 1);
+                                        PBATablaTransferenciaLine.Modify();
+                                        Clear("Escaneo Producto");
+                                        exit
+                                    end;
+                                until (PBATablaTransferenciaLine.Next() = 0);
+
+                                repeat
+                                    if PBATablaTransferenciaLine."Quantity Received" = 0 then begin
+                                        PBATablaTransferenciaLine.Validate("Qty. to Receive", PBATablaTransferenciaLine."Qty. to Receive" + 1);
+                                        PBATablaTransferenciaLine.Modify();
+                                        Clear("Escaneo Producto");
+                                        exit
+                                    end;
+                                until (PBATablaTransferenciaLine.Next() = 0);
+
+                                PBATablaTransferenciaLine.VALIDATE("Qty. to Receive", PBATablaTransferenciaLine."Qty. to Receive" + 1);
+                                PBATablaTransferenciaLine.Modify();
+                                Clear("Escaneo Producto");
+                                exit
+                            end;
+
+                        end else
+                            Error('No existe ese Item No. Producto.\ Dentro de la Tabla Transfer Orders Line.\ Verificar Campo "Escaneo Producto."\ O Pongase en contacto con el Administrador\ Del Programa Developer YSS');
+                    end;
+                end;
+
+            }
+            field("Enviar a:"; "Enviar a:")
+            {
+                ApplicationArea = All;
+                Editable = Permitir;
+            }
+        }
+        addafter(Status)
+        {
+            field("N° de Pizarra"; "N° de Pizarra")
+            {
+                ApplicationArea = All;
+                LookupPageId = PizarrasTranferencia;
+            }
+            field("Paquete asignado"; "Paquete asignado")
+            {
+                ApplicationArea = All;
+            }
+        }
+    }
+
+    actions
+    {
+        addlast(Navigation)
+        {
+            action("Habilitar/Desabilitar Escaneos")
+            {
+                ApplicationArea = All;
+                Image = Default;
+                ShortCutKey = 'Ctrl+Q';
+                trigger OnAction()
+                var
+                    myInt: Integer;
+                begin
+                    //Permitir := true
+
+                    if Permitir = false then
+                        Permitir := true else
+                        Permitir := false;
+                end;
+            }
+            action("Limpiar Datos")
+            {
+                ApplicationArea = All;
+                Image = Capacity;
+
+                trigger OnAction()
+                begin
+                    // PROCESO DE BARRIDO Y LIMPIADO DE LAS CANTIDADES DE CANTIDAD A ENVIAR
+                    PBATablaTransferenciaHeder.SetRange("No.", "No.");
+                    if PBATablaTransferenciaHeder.FindFirst() then begin
+                        //PBAProducto := Rec."Escaneo Producto";
+                        PBADocumentNo := Rec."No.";
+                        ValorZero := 0;
+
+                        if PBATablaTransferenciaHeder."Enviar a:" = PBATablaTransferenciaHeder."Enviar a:"::Cantidad_a_enviar then begin
+                            PBATablaTransferenciaLine.SetRange("Document No.", PBADocumentNo);
+                            if PBATablaTransferenciaLine.FindFirst() then
+                                repeat
+                                    if PBATablaTransferenciaLine."Qty. to Ship" <> 0 then begin
+                                        PBATablaTransferenciaLine.Validate("Qty. to Ship", ValorZero);
+                                        PBATablaTransferenciaLine.Modify();
+                                    end;
+                                until PBATablaTransferenciaLine.Next() = 0;
+                        end;
+                    end;
+                end;
+            }
+            action("Asignación de paquetes")
+            {
+                ApplicationArea = All;
+
+                trigger OnAction()
+                begin
+                    PaquetesTransferenciaHead.TransferFields(Rec);
+
+                    PaquetesTransferenciaHead.Insert(true);
+                    Message('Los datos fueron enviados a: "Lista de paquetes de transferencia"');
+                    if Confirm('Desea abrir el Documento ') then
+                        PAGE.Run(50112, PaquetesTransferenciaHead);
+                end;
+            }
+        }
+    }
+    var
+        PBATablaTransferenciaHeder: Record "Transfer Header";
+        PBATablaTransferenciaLine: Record "Transfer Line";
+        PBAProducto: Code[20];
+        PBADocumentNo: Code[20];
+        Banderaso: Boolean;
+        editar: Boolean;
+        Permitir: Boolean;
+        ValorZero: Decimal;
+        PaquetesTransferenciaHead: Record TransferenciaPaqueteHeader;
+        PackageTransferDocument: Page "Package Transfer Document";
+
+}
+////////////////////////////////////////////////////////////////////////////
+pageextension 50104 Cotizacion extends "Sales Quote"
+{
+    layout
+    {
+        // Add changes to page layout here
+    }
+    actions
+    {
+        // Add changes to page actions here
+        addafter(Action3)
+        {
+            action("Imprimir Lista de Cotización")
+            {
+                Image = Print;
+                ApplicationArea = All;
+
+                trigger OnAction()
+                var
+                    ListaCotización: Report "Lista de Cotización";
+                    SalesHeader: Record "Sales Header";
+                begin
+                    SalesHeader.SetRange("Document Type", Rec."Document Type");
+                    SalesHeader.SetRange("No.", Rec."No.");
+                    if SalesHeader.FindFirst() then begin
+                        Clear("ListaCotización");
+                        "ListaCotización".SetTableView(SalesHeader);
+                        "ListaCotización".RunModal();
+                    end;
+
+                end;
+            }
+        }
+    }
+
+    var
+        myInt: Integer;
+}
+pageextension 50105 "Complemento pago" extends "Customer Ledger Entries"
+{
+    layout
+    {
+        // Add changes to page layout here
+    }
+
+    actions
+    {
+        // Add changes to page actions here
+        addafter("&Navigate")
+        {
+            action("Complemento de Pago")
+            {
+                ApplicationArea = All;
+                Image = ApplicationWorksheet;
+                trigger OnAction()
+                var
+                    TbMovCliente: Record "Cust. Ledger Entry";
+                    RepComproPago: Report "Mix Payment";
+                begin
+                    IF "Document Type" = "Document Type"::Payment THEN BEGIN
+                        TbMovCliente.RESET;
+                        TbMovCliente.SETRANGE("Entry No.", "Entry No.");
+                        CLEAR(RepComproPago);
+                        RepComproPago.SETTABLEVIEW(TbMovCliente);
+                        //RepComproPago.SAVEASPDF;
+                        RepComproPago.RUNMODAL;
+                    END;
+                end;
+            }
+        }
+
+
+    }
+
+    var
+        myInt: Integer;
+}
+pageextension 50106 ItemCardExten extends "Item Card"
+{
+    layout
+    {
+        // Add changes to page layout here
+        addafter(Description)
+        {
+            field("Description 2"; "Description 2")
+            {
+                ApplicationArea = All;
+            }
+            field("Country/RegionOfOrigin Code"; "Country/Region of Origin Code")
+            {
+                ApplicationArea = All;
+            }
+        }
+        addlast(Item)
+        {
+            field("Manufacturer Code"; "Manufacturer Code")
+            {
+                ApplicationArea = All;
+            }
+        }
+        modify("Unit Cost")
+        {
+            Editable = false;
+            Visible = false;
+        }
+
+        addafter("Standard Cost")
+        {
+            field("Unit Cost2"; "Unit Cost")
+            {
+                ApplicationArea = Basic, Suite;
+                Editable = UnitCostEditable;
+                Enabled = UnitCostEnable;
+                Importance = Promoted;
+                ToolTip = 'Specifies the cost of one unit of the item or resource on the line.';
+                AccessByPermission = tabledata 50111 = R;
+                trigger OnDrillDown()
+                var
+                    ShowAvgCalcItem: Codeunit "Show Avg. Calc. - Item";
+                begin
+                    ShowAvgCalcItem.DrillDownAvgCostAdjmtPoint(Rec)
+                end;
+            }
+        }
+        modify("Standard Cost")
+        {
+            Visible = false;
+        }
+        modify("Last Direct Cost")
+        {
+            Visible = false;
+        }
+        modify("Unit Price")
+        {
+            Editable = PermisoEdit;
+        }
+
+        addafter("Costing Method")
+        {
+            field("Standard Cost2"; "Standard Cost")
+            {
+                ApplicationArea = Basic, Suite;
+                Enabled = StandardCostEnable;
+                ToolTip = 'Specifies the unit cost that is used as an estimation to be adjusted with variances later. It is typically used in assembly and production where costs can vary.';
+                AccessByPermission = tabledata 50111 = R;
+                trigger OnDrillDown()
+                var
+                    ShowAvgCalcItem: Codeunit "Show Avg. Calc. - Item";
+                begin
+                    ShowAvgCalcItem.DrillDownAvgCostAdjmtPoint(Rec)
+                end;
+            }
+            field("Last Direct Cost2"; "Last Direct Cost")
+            {
+                ApplicationArea = Basic, Suite;
+                Importance = Additional;
+                ToolTip = 'Specifies the most recent direct unit cost of the item.';
+                AccessByPermission = tabledata 50111 = R;
+            }
+        }
+
+
+        addafter("Warehouse Class Code")// Control1907509201)
+        {
+            group("Ubicación Geográfica")
+            {
+                field("Imagen Ubicación"; UbicacionGeo)
+                {
+                    ApplicationArea = All;
+                }
+            }
+            group(Reseña)
+            {
+                field(WorkDescriptionText; WorkDescriptionText)
+                {
+                    ApplicationArea = Basic, Suite;
+                    Importance = Additional;
+                    MultiLine = true;
+                    ShowCaption = false;
+                    Visible = true;
+                    Enabled = true;
+                    //AssistEdit = true;
+
+                    trigger OnValidate()
+                    var
+                        item: Record Item;
+                    begin
+                        //item.SetWorkDescription(WorkDescriptionText);
+                        SetWorkDescription(WorkDescriptionText);
+                    end;
+                }
+
+            }
+        }
+
+        modify("Attached Documents")
+        {
+            Visible = false;
+        }
+        addafter(CalcUnitPriceExclVAT)
+        {
+            field(PrecioDollar; PrecioDollar)
+            {
+                ApplicationArea = All;
+            }
+            field(PrecioDolarSinIva; PrecioDolarSinIva)
+            {
+                ApplicationArea = All;
+            }
+        }
+    }
+
+    actions
+    {
+        addfirst(Processing)
+
+        {
+            group("Ficha técnica")
+            {
+                action("Ficha para cliente")
+                {
+                    Image = PrintChecklistReport;
+                    ApplicationArea = All;
+                    trigger OnAction()
+                    var
+                        FichaCliente: Report "Ficha técnica cliente";
+                        item: Record Item;
+                    begin
+
+                        item.Reset();
+                        item.SetRange("No.", Rec."No.");
+                        if item.FindFirst() then begin
+                            Clear(FichaCliente);
+                            FichaCliente.SetTableView(item);
+                            FichaCliente.RunModal();
+                        end else
+                            Message('Producto no encontrado intenta de nuevo');
+                    end;
+                }
+                action("Ficha para Namuh")
+                {
+                    Image = PrintCover;
+                    ApplicationArea = All;
+                    trigger OnAction()
+                    var
+                        FichaNamuh: Report "Ficha técnica NAMUH";
+                        item: Record Item;
+                    begin
+                        item.Reset();
+                        item.SetRange("No.", Rec."No.");
+                        if item.FindFirst() then begin
+                            Clear(FichaNamuh);
+                            FichaNamuh.SetTableView(item);
+                            FichaNamuh.RunModal();
+                        end;
+                    end;
+                }
+            }
+        }
+        addlast(Navigation)
+        {
+            action("Imprimir etiqueta Producto")
+            {
+                Image = PostedReceivableVoucher;
+                CaptionML = ENU = 'Print product label', ESP = 'Imprimir Etiqueta Producto';
+                ApplicationArea = All;
+                trigger OnAction()
+
+                begin
+                    Rec.SetRange("No.", "No.");
+                    if Rec.FindFirst() then begin
+                        Report.RunModal(50117, true, false, Rec);
+
+                    end;
+
+                end;
+            }
+            action("Inventario producto almacen fecha")
+            {
+                Image = NewWarehouse;
+                ApplicationArea = All;
+
+                trigger OnAction()
+                begin
+                    PBAtablaCreada.SetRange("Cod.Producto", Rec."No.");
+                    if PBAtablaCreada.FindFirst() then begin
+
+                        Page.Run(50100, PBAtablaCreada);
+                    end;
+                end;
+
+            }
+        }
+    }
+
+    var
+        WorkDescriptionText: Text;
+        UnitCostEditable: Boolean;
+        UnitCostEnable: Boolean;
+        StandardCostEnable: Boolean;
+        PermisoEdit: Boolean;
+        PBAtablaCreada: Record "Almacen Por Producto";
+
+    trigger OnOpenPage()
+    var
+        UserSetup: Record "User Setup";
+    begin
+        EnableControls();
+        UserSetup.SetRange("User ID", UserId);
+        if UserSetup.FindFirst() then begin
+            if UserSetup."Precios Especiales" = true then begin
+                PermisoEdit := true;
+
+            end else
+                PermisoEdit := false;
+        end;
+
+    end;
+
+    trigger OnAfterGetRecord()
+    var
+        myInt: Integer;
+    begin
+        WorkDescriptionText := GetResenaBigText();
+    end;
+
+    local procedure EnableControls()
+    var
+        ItemLedgerEntry: Record "Item Ledger Entry";
+    begin
+        if Type = Type::Inventory then begin
+            ItemLedgerEntry.SetRange("Item No.", "No.");
+            UnitCostEditable := ItemLedgerEntry.IsEmpty;
+        end else
+            UnitCostEditable := true;
+
+        UnitCostEnable := "Costing Method" <> "Costing Method"::Standard;
+        StandardCostEnable := "Costing Method" = "Costing Method"::Standard;
+    end;
+}
+pageextension 50107 reciboefectivo extends "Cash Receipt Journal"
+{
+    layout
+    {
+        // Add changes to page layout here
+        addafter(Description)
+        {
+            field("Payment Method Code"; "Payment Method Code")
+            {
+                ApplicationArea = All;
+                Editable = true;
+            }
+        }
+    }
+
+    actions
+    {
+        // Add changes to page actions here
+    }
+
+    var
+        myInt: Integer;
+}
+pageextension 50108 "Modificacion Acciones" extends "Sales Order Subform"
+{
+    layout
+    {
+        // Add changes to page layout here
+        modify("Unit Price")
+        {
+            Editable = EditarUnitprice;
+        }
+        modify("Line Amount")
+        {
+            Editable = false;
+        }
+        modify(Description)
+        {
+            Editable = false;
+        }
+        modify("Line Discount %")
+        {
+            Visible = false;
+        }
+        addafter(Quantity)
+        {
+            field("Transaction Type"; "Transaction Type")
+            {
+                ApplicationArea = Basic, Suite;
+            }
+        }
+        addbefore("Unit Price")
+        {
+            field(PrecioDolar; PrecioDolar)
+            {
+                ApplicationArea = All;
+                Editable = false;
+            }
+        }
+        addafter("Unit Price")
+        {
+            field("Line Discount %2"; "Line Discount %")
+            {
+                ApplicationArea = All;
+                Editable = EditarLineDiscount;
+            }
+        }
+    }
+
+    actions
+    {
+        // Add changes to page actions here
+        movelast(Processing; "Item Availability by")
+        movelast(Processing; ItemTrackingLines)
+        addafter("&Line")
+        {
+            action("Asigna lotes")
+            {
+                ApplicationArea = All;
+                Image = Lot;
+
+
+                trigger OnAction()
+                var
+                    BolLineasFaltantes: Boolean;
+                    TbLinVenta: Record "Sales Line";
+                    TbProducto: Record Item;
+                    TbItemTracking: Record "Item Tracking Code";
+                    TbReservEntry: Record "Reservation Entry";
+                    TbReservEntry2: Record "Reservation Entry";
+                    VarCantidadPendiente: Decimal;
+                    TbMovprod: Record "Item Ledger Entry";
+                    TbTrackingSpecification: Record "Tracking Specification";
+                    CUItemTracking: Codeunit ItemTracking;
+                    VarApartadoCapa: Decimal;
+                    VarCantidadCapa: Decimal;
+                    VarCantidadAMover: Decimal;
+                    mreserv: Record "Reservation Entry";
+                    auxmreserv: Record "Reservation Entry";
+                    Salesinfo: Codeunit SalesInfoPaneMgtExten;
+                    detener: Boolean;
+                    Item: Record Item;
+
+                    QtyToReserve: Decimal;
+                    QtyToReserveBase: Decimal;
+                    ReservMgt: Codeunit "Reservation Management";
+                begin
+                    BolLineasFaltantes := FALSE;
+                    TbLinVenta.RESET;
+                    TbLinVenta.SETRANGE("Document Type", Rec."Document Type");
+                    TbLinVenta.SETRANGE("Document No.", Rec."Document No.");
+                    TbLinVenta.SETRANGE(Type, TbLinVenta.Type::Item);
+                    TbLinVenta.SETFILTER("Qty. to Ship", '>%1', 0);
+                    IF TbLinVenta.FINDFIRST THEN begin
+                        REPEAT
+                            IF TbLinVenta."Qty. to Ship" <> 0 THEN BEGIN
+                                TbProducto.GET(TbLinVenta."No.");
+                                IF TbItemTracking.GET(TbProducto."Item Tracking Code") THEN BEGIN
+                                    //IF TbItemTracking."Lot Specific Tracking" THEN
+                                    BEGIN
+                                        TbReservEntry.RESET;
+                                        TbReservEntry.SETRANGE("Source ID", TbLinVenta."Document No.");
+                                        TbReservEntry.SETRANGE("Source Ref. No.", TbLinVenta."Line No.");
+                                        IF TbReservEntry.FINDFIRST THEN
+                                            REPEAT
+                                                TbReservEntry2.RESET;
+                                                TbReservEntry2.SETRANGE("Entry No.", TbReservEntry."Entry No.");
+                                                IF TbReservEntry2.FINDFIRST THEN
+                                                    TbReservEntry2.DELETEALL;
+                                            UNTIL TbReservEntry.NEXT = 0;
+                                        BEGIN
+                                            VarCantidadPendiente := TbLinVenta."Qty. to Ship (Base)";
+                                            TbMovprod.RESET;
+                                            //               TbMovprod.SETCURRENTKEY("Item No.","Variant Code",Open,Positive,"Location Code",
+                                            //                               "Expiration Date","Posting Date","Lot No.","Serial No.");
+                                            //            TbMovprod.SETCURRENTKEY("Item No.",Open,"Variant Code",Positive,
+                                            //                                    "Expiration Date","Lot No.","Serial No.");
+
+                                            TbMovprod.SETCURRENTKEY("Item No.", "Variant Code", Open, Positive, "Location Code", "Posting Date", "Lot No.");
+
+                                            TbMovprod.SETRANGE("Item No.", TbLinVenta."No.");
+                                            IF TbLinVenta."Variant Code" <> '' THEN          //////////quedo vacio
+                                                TbMovprod.SETRANGE("Variant Code", TbLinVenta."Variant Code");
+                                            TbMovprod.SETRANGE(Open, TRUE);
+                                            TbMovprod.SETRANGE(Positive, TRUE);
+                                            TbMovprod.SETRANGE("Location Code", TbLinVenta."Location Code");
+                                            // TbMovprod.SETRANGE("Lote Bloqueado",FALSE);
+                                            IF TbMovprod.FINDFIRST THEN
+                                                REPEAT
+                                                    //*** codigo para revisar los lotes y cantidad disponible
+                                                    CLEAR(TbTrackingSpecification);
+                                                    TbTrackingSpecification.INIT;
+                                                    TbTrackingSpecification.Positive := FALSE;
+                                                    TbTrackingSpecification."Item No." := TbLinVenta."No.";
+                                                    TbTrackingSpecification."Location Code" := TbLinVenta."Location Code";
+                                                    TbTrackingSpecification."Creation Date" := WORKDATE;
+                                                    TbTrackingSpecification."Source Type" := 37;
+                                                    TbTrackingSpecification."Source Subtype" := 1;
+                                                    TbTrackingSpecification."Source ID" := TbLinVenta."Document No.";
+                                                    TbTrackingSpecification."Source Batch Name" := '';
+                                                    TbTrackingSpecification."Source Ref. No." := TbLinVenta."Line No.";
+                                                    TbTrackingSpecification."Lot No." := TbMovprod."Lot No.";
+                                                    TbTrackingSpecification."Qty. per Unit of Measure" := 1;
+                                                    //TbTrackingSpecification.INSERT;
+                                                    //*** fin codigo para revisar los lotes y cantidad disponible
+                                                    CLEAR(CUItemTracking);
+                                                    VarApartadoCapa := 0;
+                                                    CUItemTracking.AssistEditTrackingBP(TbTrackingSpecification, VarApartadoCapa);
+
+                                                    //TbMovprod."Remaining Quantity" := TbMovprod."Remaining Quantity" - VarApartadoCapa;
+                                                    VarCantidadAMover := 0;
+                                                    IF VarApartadoCapa > 0 THEN BEGIN
+                                                        VarCantidadCapa := VarApartadoCapa;
+
+                                                        IF VarCantidadCapa < VarCantidadPendiente THEN
+                                                            VarCantidadAMover := VarCantidadCapa
+                                                        ELSE
+                                                            VarCantidadAMover := VarCantidadPendiente;
+                                                    END;
+
+                                                    IF VarCantidadAMover > 0 THEN BEGIN
+                                                        mreserv.INIT;
+                                                        auxmreserv.RESET;
+                                                        IF auxmreserv.FINDLAST THEN //encuentra el ultimo
+                                                            mreserv."Entry No." := auxmreserv."Entry No." + 1   ///// si  lo hace 
+                                                        ELSE
+                                                            mreserv."Entry No." := 1;  //////////////////////////////////////////
+
+                                                        mreserv.Positive := FALSE;
+                                                        mreserv."Item No." := TbLinVenta."No.";
+                                                        mreserv."Location Code" := TbLinVenta."Location Code";
+                                                        mreserv."Qty. per Unit of Measure" := TbLinVenta."Qty. per Unit of Measure";
+                                                        mreserv.VALIDATE(Quantity, ROUND((VarCantidadAMover * -1) / mreserv."Qty. per Unit of Measure", 0.00001));
+                                                        mreserv.VALIDATE("Quantity (Base)", (VarCantidadAMover * -1));  // se va a buscar cantidad
+                                                        mreserv."Reservation Status" := mreserv."Reservation Status"::Surplus;
+                                                        mreserv."Creation Date" := WORKDATE;
+                                                        mreserv."Source Type" := 37;
+                                                        mreserv."Source Subtype" := 1;
+                                                        mreserv."Source ID" := TbLinVenta."Document No.";
+                                                        mreserv."Source Batch Name" := '';
+                                                        mreserv."Source Ref. No." := TbLinVenta."Line No.";
+                                                        mreserv."Lot No." := TbMovprod."Lot No.";
+                                                        mreserv."Shipment Date" := WORKDATE;
+                                                        mreserv."Created By" := USERID;
+                                                        mreserv."Item Tracking" := mreserv."Item Tracking"::"Lot No.";
+                                                        mreserv.INSERT(TRUE);
+                                                        COMMIT;
+                                                    END;
+
+                                                    VarCantidadPendiente := VarCantidadPendiente - VarCantidadAMover;
+                                                UNTIL (TbMovprod.NEXT = 0) OR (VarCantidadPendiente = 0)
+                                            ELSE BEGIN
+                                                MESSAGE('No hay existencia y lote para el artículo: : %1 ', TbLinVenta."No.");
+                                            END;
+                                            IF VarCantidadPendiente > 0 THEN begin
+                                                BolLineasFaltantes := TRUE; ////aqui pon el mensaje 
+                                                ///desde aqui averigua que show 
+                                            end;
+
+                                        END;
+                                    END;
+                                END;
+                                if TbProducto."Item Tracking Code" = '' then begin
+                                    //Message('Mandame el producto que nos tine lote %1 tabla sales line %2  Rec %3  /n  %4', TbProducto."No.", TbLinVenta."Line No.", Rec, TbLinVenta);
+                                    TestField(Type, Type::Item);
+                                    TestField("No.");
+
+                                    ReserveSalesLine.ReservQuantity(TbLinVenta, QtyToReserve, QtyToReserveBase);
+                                    if QtyToReserveBase <> 0 then begin
+
+                                        ReservMgt.SetSalesLine(TbLinVenta); //+++ cambiamos por el Rec
+                                        TestField("Shipment Date");
+                                        ReservMgt.AutoReserve(FullAutoReservation, '', "Shipment Date", QtyToReserve, QtyToReserveBase);
+                                        Find;
+
+                                    end;
+
+                                end;
+
+                            END;
+                        UNTIL TbLinVenta.NEXT = 0;
+
+                        IF BolLineasFaltantes THEN begin
+                            Message('Existe al menos una línea en "líns. seguim. prod." que falta por asignar lote, para el producto %1 con el almacén %2, en la linea %3', TbLinVenta."No.", TbLinVenta."Location Code", TbLinVenta."Line No.");
+                        end else begin
+                            Message('Lotes Asignados!');
+                            //detener := true;
+                            Salesinfo.DetenSalesFactBox(detener);
+
+                        end;
+
+                    end;
+
+                end;
+            }
+        }
+    }
+    var
+        ReserveSalesLine: Codeunit "Sales Line-Reserve";
+        FullAutoReservation: Boolean;
+        EditarUnitprice: Boolean;
+        EditarLineDiscount: Boolean;
+
+    trigger OnOpenPage()
+    var
+        UserSetup: Record "User Setup";
+    begin
+
+        UserSetup.SetRange("User ID", UserId);
+        if UserSetup.FindFirst() then begin
+            if UserSetup."Editar Precios Unitarios PV" = true then begin
+                EditarUnitprice := true;
+            end else begin
+                EditarUnitprice := false;
+            end;
+            //// añadir la otra condición 
+            if UserSetup."Editar Descuento" = true then begin
+                EditarLineDiscount := true;
+            end else begin
+                EditarLineDiscount := false;
+            end;
+        end;
+    end;
+
+    trigger OnAfterGetRecord()
+    var
+        UserSetup: Record "User Setup";
+    begin
+        UserSetup.SetRange("User ID", UserId);
+        if UserSetup.FindFirst() then begin
+            if UserSetup."Editar Precios Unitarios PV" = true then begin
+                EditarUnitprice := true;
+            end else begin
+                EditarUnitprice := false;
+            end;
+            //// añadir la otra condición 
+            if UserSetup."Editar Descuento" = true then begin
+                EditarLineDiscount := true;
+            end else begin
+                EditarLineDiscount := false;
+            end;
+        end;
+    end;
+
+}
+pageextension 50109 "PagePedidos de Compra" extends "Purchase Order"
+{
+    layout
+    {
+        // Add changes to page layout here
+
+    }
+
+    actions
+    {
+        addlast(Navigation)
+        {
+            action("Imprimir Etiqueta")
+            {
+                ApplicationArea = All;
+                Image = PrintVoucher;
+
+
+                trigger OnAction()
+                begin
+                    Rec.SetRange("No.", "No.");
+                    if Rec.FindFirst() then begin
+                        Report.RunModal(50116, true, false, Rec);
+                    end;
+
+                end;
+            }
+            action("Llenar Lotes Genericos")
+            {
+                Image = Line;
+                ApplicationArea = All;
+                CaptionML = ENU = 'Fill Generic Lots', ESM = 'Llenar Lotes Genericos';
+
+
+                trigger OnAction()
+                var
+                    PBAEntryNo: Decimal;
+
+                begin
+                    PBATablaLotes.SetRange("Source Type", 39);
+                    PBATablaLotes.SetRange("Source Subtype", 1);
+                    PBATablaLotes.SetRange("Source ID", Rec."No.");
+                    if PBATablaLotes.FindFirst() then
+                        PBATablaLotes.DeleteAll();
+
+                    Clear(PBATablaLotes);
+
+
+                    PBAPurchaseLine.SetRange("Document No.", Rec."No.");
+                    if PBAPurchaseLine.FindFirst() then begin
+                        repeat
+
+                            if PBATablaLotes.FindLast() then
+                                PBAEntryNo := PBATablaLotes."Entry No." + 1
+                            else
+                                PBAEntryNo := 1;
+
+                            PBATablaLotes.Init();
+                            PBATablaLotes."Entry No." := PBAEntryNo;
+                            PBATablaLotes."Item No." := PBAPurchaseLine."No.";
+                            PBATablaLotes."Location Code" := PBAPurchaseLine."Location Code";
+                            PBATablaLotes."Quantity (Base)" := PBAPurchaseLine.Quantity;
+                            PBATablaLotes."Reservation Status" := PBATablaLotes."Reservation Status"::Surplus;
+                            //PBATablaLotes.Description :=
+                            //PBATablaLotes."Creation Date" :=
+                            PBATablaLotes."Transferred from Entry No." := 0;
+                            PBATablaLotes."Source Type" := 39;
+                            PBATablaLotes."Source Subtype" := 1;
+                            PBATablaLotes."Source ID" := Rec."No.";
+                            //Source Batch Name := 
+                            PBATablaLotes."Source Prod. Order Line" := 0;
+                            PBATablaLotes."Source Ref. No." := PBAPurchaseLine."Line No.";
+                            PBATablaLotes."Item Ledger Entry No." := 0;
+                            //PBATablaLotes."Expected Receipt Date" := 
+                            //PBATablaLotes."Shipment Date" :=
+                            //PBATablaLotes."Serial No." :=
+                            PBATablaLotes."Created By" := UserId;
+                            //PBATablaLotes."Changed By" :=
+                            PBATablaLotes.Positive := true;
+                            PBATablaLotes."Qty. per Unit of Measure" := 1;
+                            PBATablaLotes.Quantity := PBAPurchaseLine.Quantity;
+                            PBATablaLotes."Action Message Adjustment" := 0;
+                            //PBATablaLotes.Binding := 
+                            //PBATablaLotes."Suppressed Action Msg." :=
+                            PBATablaLotes."Planning Flexibility" := PBATablaLotes."Planning Flexibility"::Unlimited;
+                            PBATablaLotes."Appl.-to Item Entry" := 0;
+                            //PBATablaLotes."Warranty Date" :=
+                            //PBATablaLotes."Expiration Date" :=
+                            PBATablaLotes."Qty. to Handle (Base)" := PBAPurchaseLine.Quantity;
+                            PBATablaLotes."Qty. to Invoice (Base)" := PBAPurchaseLine.Quantity;
+                            PBATablaLotes."Quantity Invoiced (Base)" := 0;
+                            //PBATablaLotes."New Serial No." :=
+                            //PBATablaLotes."New Lot No." :=
+                            //PBATablaLotes."Disallow Cancellation" :=
+                            PBATablaLotes."Lot No." := 'Generico';
+                            //PBATablaLotes."Variant Code" :=
+                            PBATablaLotes."Appl.-from Item Entry" := 0;
+                            //PBATablaLotes.Correction :=
+                            //PBATablaLotes."New Expiration Date" :=
+                            PBATablaLotes."Item Tracking" := PBATablaLotes."Item Tracking"::"Lot No.";
+
+                            PBATablaLotes.Insert();
+                        until PBAPurchaseLine.Next() = 0;
+
+                        Message('Asignacion Terminada');
+
+                    end;
+                end;
+            }
+
+
+        }
+    }
+
+    var
+        PBATablaLotes: Record "Reservation Entry";
+
+        PBAPurchaseLine: Record "Purchase Line";
+}
+pageextension 50110 ItemReclassJournal extends "Item Reclass. Journal"
+{
+    layout
+    {
+        // Add changes to page layout here
+    }
+
+    actions
+    {
+        addafter("&Print")
+        {
+            action("Tomar remisiones")
+            {
+                ApplicationArea = All;
+                Image = Task;
+
+                trigger OnAction()
+                var
+                    postedPurchaseReceipts: Page "Posted Purchase Receipts";
+                begin
+                    if Confirm('Desea ir al listado "Histórico recepciones de compra"?') then begin
+
+                        postedPurchaseReceipts.RecibeSeccion(Rec."Journal Batch Name", Rec."Journal Template Name");
+                        postedPurchaseReceipts.RunModal();
+
+                    end;
+
+
+                end;
+            }
+            action(Pedimento)
+            {
+                ApplicationArea = All;
+                Image = Trace;
+
+                trigger OnAction()
+                var
+                    PagPedimento: Page Pedimento;
+
+                begin
+                    //Message('Mandame el Rec %1', Rec);
+                    PagPedimento.RecibeBachName(Rec."Journal Batch Name", Rec."Journal Template Name");
+                    PagPedimento.RunModal();
+
+                end;
+            }
+        }
+        // Add changes to page actions here
+    }
+
+    var
+        myInt: Integer;
+}
+pageextension 50111 HistRecepCompra extends "Posted Purchase Receipts"
+{
+    layout
+    {
+        // Add changes to page layout here
+    }
+
+    actions
+    {
+        addafter("&Receipt")
+        {
+            action("Diario de Reclasificación ")
+            {
+                ApplicationArea = All;
+
+                trigger OnAction()
+                var
+                    PurchRecuptLine: Record "Purch. Rcpt. Line";
+                    ItemJournalLine: Record "Item Journal Line";
+                    ReservEntry: Record "Reservation Entry";
+                    item: Record Item;
+                    UltimaLinea: Integer;
+                    NeQuantity: Decimal;
+                    ultReservEntry: Integer;
+                    ItemLedgerEntry: Record "Item Ledger Entry";
+                    CantidadLedgerEntry: Decimal;
+                    SourceCodeSetup: Record "Source Code Setup";
+                    ItemReclassJour: Code[10];
+                begin
+                    SourceCodeSetup.Get();
+                    ItemReclassJour := SourceCodeSetup."Item Reclass. Journal";
+                    PurchRecuptLine.SetRange("Document No.", Rec."No.");
+                    PurchRecuptLine.SetRange(Type, PurchRecuptLine.Type::Item);
+                    if PurchRecuptLine.FindFirst() then begin
+                        repeat
+                            if PurchRecuptLine."Line No." = 0 then begin
+                            end
+                            else begin
+
+                                ItemJournalLine.SetRange("Journal Template Name", GlobalJTname);
+                                ItemJournalLine.SetRange("Journal Batch Name", GlobalBachName);
+                                if ItemJournalLine.FindLast() then begin
+                                    UltimaLinea := ItemJournalLine."Line No.";
+                                end else
+                                    UltimaLinea := 0;
+
+
+                                ItemJournalLine.Reset();
+                                ItemJournalLine."Journal Template Name" := GlobalJTname;
+                                ItemJournalLine."Line No." := UltimaLinea + 10000;
+
+                                ItemJournalLine.Validate("Item No.", PurchRecuptLine."No.");
+                                ItemJournalLine.Description := PurchRecuptLine.Description;
+
+                                ItemJournalLine."Posting Date" := WorkDate();
+                                ItemJournalLine."Entry Type" := ItemJournalLine."Entry Type"::Transfer;
+                                ItemJournalLine."Document No." := PurchRecuptLine."Document No.";
+                                ItemJournalLine.Validate("Location Code", PurchRecuptLine."Location Code");
+                                //ItemJournalLine."Inventory Posting Group" := 'RESALE';
+
+                                ItemJournalLine."New Location Code" := PurchRecuptLine."Location Code";
+                                ItemJournalLine.Quantity := PurchRecuptLine.Quantity;
+                                ItemJournalLine."Invoiced Quantity" := PurchRecuptLine.Quantity;
+                                ItemJournalLine."Quantity (Base)" := PurchRecuptLine."Quantity (Base)";
+                                ItemJournalLine."Invoiced Qty. (Base)" := PurchRecuptLine."Quantity (Base)";
+                                ItemJournalLine."Source Code" := ItemReclassJour;
+                                ItemJournalLine."Journal Batch Name" := GlobalBachName;
+                                ItemJournalLine.Validate("Shortcut Dimension 1 Code", PurchRecuptLine."Shortcut Dimension 1 Code");
+                                ItemJournalLine.Validate("Shortcut Dimension 2 Code", PurchRecuptLine."Shortcut Dimension 2 Code");
+                                ItemJournalLine.Validate("New Shortcut Dimension 1 Code", PurchRecuptLine."Shortcut Dimension 1 Code");
+                                ItemJournalLine.Validate("New Shortcut Dimension 2 Code", PurchRecuptLine."Shortcut Dimension 2 Code");
+                                ItemJournalLine.Insert();
+                                //Message('valor lineas %1', PurchRecuptLine."Line No.");
+
+                                ////////////////////////////////////////////////////////////////////////////
+                                //Apartdo para buscar  lote generico
+                                ItemLedgerEntry.SetRange("Item No.", PurchRecuptLine."No.");
+                                ItemLedgerEntry.SetRange("Entry Type", ItemLedgerEntry."Entry Type"::Purchase);
+                                ItemLedgerEntry.SetRange("Document No.", PurchRecuptLine."Document No.");
+                                ItemLedgerEntry.SetRange("Document Line No.", PurchRecuptLine."Line No.");
+                                ItemLedgerEntry.SetRange("Lot No.", 'GENERICO');
+                                if ItemLedgerEntry.FindFirst() then begin
+
+                                    CantidadLedgerEntry := ItemLedgerEntry.Quantity;
+                                end else
+                                    CantidadLedgerEntry := PurchRecuptLine.Quantity;
+
+                                item.SetRange("No.", PurchRecuptLine."No.");
+                                if item.FindFirst() then begin
+
+                                    if item."Item Tracking Code" <> '' then begin
+                                        ReservEntry.SetRange(Positive, false);
+                                        if ReservEntry.FindLast() then begin
+
+                                            ultReservEntry := ReservEntry."Entry No.";
+                                        end else
+                                            ultReservEntry := 0;
+
+                                        ReservEntry.Reset();
+                                        ReservEntry."Entry No." := ultReservEntry + 1;
+                                        ReservEntry."Item No." := PurchRecuptLine."No.";
+                                        ReservEntry."Location Code" := PurchRecuptLine."Location Code";
+                                        NeQuantity := (CantidadLedgerEntry * -1);
+
+                                        ReservEntry."Quantity (Base)" := NeQuantity;
+                                        ReservEntry."Reservation Status" := ReservEntry."Reservation Status"::Prospect;
+                                        ReservEntry."Creation Date" := WorkDate();
+                                        ReservEntry."Source Type" := 83;
+                                        ReservEntry."Source Subtype" := 4;
+                                        ReservEntry."Source ID" := GlobalJTname;
+                                        ReservEntry."Source Batch Name" := GlobalBachName;
+                                        ReservEntry."Source Ref. No." := ItemJournalLine."Line No.";
+                                        ReservEntry."Shipment Date" := WorkDate();
+                                        ReservEntry.Quantity := NeQuantity;
+                                        ReservEntry."Qty. to Handle (Base)" := NeQuantity;
+                                        ReservEntry."Qty. to Invoice (Base)" := NeQuantity;
+                                        ///////////Selecciona el lote que  esta en item ledger entry
+                                        ReservEntry."New Lot No." := ItemLedgerEntry."Lot No.";
+                                        ReservEntry."Lot No." := ItemLedgerEntry."Lot No.";
+
+                                        ReservEntry."Item Tracking" := ReservEntry."Item Tracking"::"Lot No.";
+                                        ReservEntry.Insert();
+
+                                    end;
+
+                                end;
+
+                                ////////////////////////////////////////////////////////////////////////////
+
+                            end;
+                        until PurchRecuptLine.Next() = 0;
+                    end;
+                    if Confirm('Abrir diario?') then
+                        Page.Run(393);
+
+                end;
+            }
+        }
+        // Add changes to page actions here
+    }
+    var
+        GlobalBachName: Code[10];
+        GlobalJTname: code[10];
+
+    procedure RecibeSeccion(var BatchName: code[10]; var JourTemplateName: code[10])
+    var
+        myInt: Integer;
+    begin
+        GlobalBachName := BatchName;
+        GlobalJTname := JourTemplateName;
+    end;
+}
+pageextension 50112 LotNoInformationCard extends "Lot No. Information Card"
+{
+    layout
+    {
+        // Add changes to page layout here
+        addafter(Blocked)
+        {
+            field(AgenteAduanal; AjenteAduanal)
+            {
+                ApplicationArea = All;
+            }
+            field(PuertoEntrada; PuertoEntrada)
+            {
+                ApplicationArea = All;
+            }
+            field(FechaPedimento; FechaPedimento)
+            {
+                ApplicationArea = All;
+            }
+        }
+    }
+
+    actions
+    {
+        // Add changes to page actions here
+    }
+
+    var
+        myInt: Integer;
+}
+
+pageextension 50113 LotNoInforationList extends "Lot No. Information List"
+{
+    layout
+    {
+        // Add changes to page layout here
+        addafter("Lot No.")
+        {
+            field(AjenteAduanal; AjenteAduanal)
+            {
+                ApplicationArea = All;
+            }
+            field(PuertoEntrada; PuertoEntrada)
+            {
+                ApplicationArea = All;
+            }
+            field(FechaPedimento; FechaPedimento)
+            {
+                ApplicationArea = All;
+            }
+        }
+    }
+
+    actions
+    {
+        // Add changes to page actions here
+    }
+
+    var
+        myInt: Integer;
+}
+pageextension 50114 ItemList extends "Item List"
+{
+    layout
+    {
+        // Add changes to page layout here
+        addafter(Description)
+        {
+            field("Description 2"; "Description 2")
+            {
+                ApplicationArea = All;
+            }
+            field("Country/Region of Origin Code"; "Country/Region of Origin Code")
+            {
+                ApplicationArea = All;
+            }
+        }
+        modify("Unit Cost")
+        {
+            Visible = false;
+        }
+        modify(Control1901314507)
+        {
+            Visible = false;
+
+        }
+        addafter("Cost is Adjusted")
+        {
+            field("Unit Cost2"; "Unit Cost")
+            {
+                ApplicationArea = Basic, Suite;
+                ToolTip = 'Specifies the cost per unit of the item.';
+                AccessByPermission = tabledata 50111 = R;
+            }
+        }
+    }
+
+    actions
+    {
+        addlast(navigation)
+        {
+            action("Imprimir Etiquetas Selecionadas")
+            {
+                Image = "Grid";
+                ApplicationArea = All;
+                trigger OnAction()
+
+                begin
+                    PBAFromItem.Copy(Rec);
+                    CurrPage.SetSelectionFilter(PBAFromItem);
+
+                    if PBAFromItem.FindFirst then begin
+
+                        PBACodeUnitEtiquetas.GenerarVariasEtiquetas(PBAFromItem);
+                    end;
+                end;
+
+            }
+        }
+    }
+
+    var
+        myInt: Integer;
+        PBAFromItem: Record Item;
+        PBACodeUnitEtiquetas: Codeunit EtiquetaNamuh;
+}
+pageextension 50120 SalesPicesExt extends "Sales Prices"
+{
+
+    layout
+    {
+        // Add changes to page layout here
+        addafter("Unit Price")
+        {
+            field("Unit Price Includes VAT "; "Unit Price Includes VAT ")
+            {
+                ApplicationArea = All;
+                Editable = PermisoEdit;
+            }
+        }
+        modify(Control1)
+        {
+            Enabled = PermisoEdit;
+        }
+    }
+
+    actions
+    {
+        // Add changes to page actions here
+    }
+    trigger OnOpenPage()
+    var
+        UserSetup: Record "User Setup";
+    begin
+
+        UserSetup.SetRange("User ID", UserId);
+        if UserSetup.FindFirst() then begin
+            if UserSetup."Precios Especiales" = true then begin
+                PermisoEdit := true;
+
+            end else
+                PermisoEdit := false;
+        end;
+
+    end;
+
+    var
+        PermisoEdit: Boolean;
+}
+pageextension 50121 SalesLineFactBoxExt extends "Sales Line FactBox"
+{
+    layout
+    {
+
+        // Add changes to page layout here
+        addafter("Reserved Receipt")
+
+        {
+
+            field("Cantidad Reservada Lote"; SalesInfoPaneMgt.CalcReservedDemandExten(Rec))
+            {
+
+                ApplicationArea = Reservation;
+                Caption = 'Cantidad Reservada Lote';
+                DecimalPlaces = 0 : 5;
+                ToolTip = 'Specifies, for the item on the sales line, how many are reserved on demand records.';
+            }
+            field("Cantidad Reservada (linea)"; SalesInfoPaneMgt.CalcReservaDemandLine(Rec))
+            {
+                ApplicationArea = Reservation;
+                Caption = 'Cantidad Reservada (linea)';
+                DecimalPlaces = 0 : 5;
+                ToolTip = 'Specifies, for the item on the sales line, how many are reserved on demand records.';
+            }
+
+        }
+        modify("Reserved Requirements")
+        {
+            Visible = false;
+        }
+    }
+
+    actions
+    {
+        // Add changes to page actions here
+    }
+
+
+    var
+        SalesInfoPaneMgt: Codeunit SalesInfoPaneMgtExten;
+
+}
+pageextension 50122 SalesQuoteSubform extends "Sales Quote Subform"
+{
+    layout
+    {
+        // Add changes to page layout here
+        modify(Description)
+        {
+            Editable = false;
+        }
+        modify("Unit Price")
+        {
+            Editable = false;
+        }
+        modify("Line Amount")
+        {
+            Editable = false;
+        }
+
+    }
+
+    actions
+    {
+        // Add changes to page actions here
+    }
+
+    var
+
+}
+pageextension 50123 PostedSalesinvoiceSubform extends "Posted Sales Invoice Subform"
+{
+    layout
+    {
+        addafter("Amount Including VAT")
+        {
+            field("VAT Prod. Posting Group"; "VAT Prod. Posting Group")
+            {
+                ApplicationArea = All;
+            }
+        }
+    }
+
+    actions
+    {
+        // Add changes to page actions here
+    }
+
+    var
+        myInt: Integer;
+}
+pageextension 50124 MovContabilidad extends "General Ledger Entries"
+{
+    layout
+    {
+        // Add changes to page layout here
+        addafter("G/L Account No.")
+        {
+            field("Source No."; "Source No.")
+            {
+                ApplicationArea = All;
+            }
+        }
+    }
+
+    actions
+    {
+        // Add changes to page actions here
+    }
+
+    var
+        myInt: Integer;
+}
+pageextension 50125 UserSetup extends "User Setup"
+{
+    layout
+    {
+        addafter(PhoneNo)
+        {
+            field("Precios Especiales"; "Precios Especiales")
+            {
+                ApplicationArea = All;
+            }
+            field("Editar Precios Unitarios PV"; "Editar Precios Unitarios PV")
+            {
+                ApplicationArea = All;
+            }
+            field("Editar Descuento"; "Editar Descuento")
+            {
+                ApplicationArea = All;
+            }
+        }
+        addafter(Email)
+        {
+            field("Notificación Cambio Precio"; "Notificación Cambio Precio")
+            {
+                ApplicationArea = All;
+                CaptionML = ENU = 'Notify Changes in Product Prices', ESP = 'Notificar Cambios en Precios de Productos';
+                ToolTipML = ENU = 'Send email if there is a change in the price of any product', ESP = 'Enviar correo electronico si se registra un cambio en el precio de algun producto';
+            }
+        }
+    }
+
+    actions
+    {
+        // Add changes to page actions here
+    }
+
+    var
+        myInt: Integer;
+}
+pageextension 50126 PurchaseOrderSubform extends "Purchase Order Subform"
+{
+    layout
+    {
+        addafter(Quantity)
+        {
+            field("Transaction Type"; "Transaction Type")
+            {
+                ApplicationArea = All;
+                Editable = true;
+            }
+        }
+    }
+
+    actions
+    {
+        // Add changes to page actions here
+    }
+
+    var
+        transaction: Record "Transaction Type";
+        pag: Page "Transaction Types";
+}
+pageextension 50127 ItemLedgerEntries extends "Item Ledger Entries"
+{
+    layout
+    {
+        addafter("Order Type")
+        {
+            field("Transaction Type"; "Transaction Type")
+            {
+                ApplicationArea = All;
+            }
+        }
+    }
+
+    actions
+    {
+        // Add changes to page actions here
+    }
+
+    var
+        myInt: Integer;
+}
+pageextension 50129 "O365 Act Extens " extends "O365 Activities"
+{
+    trigger OnOpenPage()
+    var
+        PBAcantidadCDMX: Decimal;
+        PBAcantidadSMA: Decimal;
+        PBAcantidadMTY: Decimal;
+        PBAcantidadCAB: Decimal;
+        ActivitiesCue: Record "Cues Yael";
+
+    begin
+        CalcSalesShopCDMX(false, PBAcantidadCDMX);
+        CalcSalesShopSMA(false, PBAcantidadSMA);
+        CalcSalesShopMTY(false, PBAcantidadMTY);
+        CalcSalesShopCAB(false, PBAcantidadCAB);
+
+
+        if ActivitiesCue.FindFirst() then begin
+            ActivitiesCue.DeleteAll();
+        end;
+
+        Init();
+        ActivitiesCue."Primary Key" := '1';
+        ActivitiesCue."Ventas del Mes CDMX" := PBAcantidadCDMX;
+        ActivitiesCue."Ventas del Mes SMA" := PBAcantidadSMA;
+        ActivitiesCue."Ventas del Mes MTY" := PBAcantidadMTY;
+        ActivitiesCue."Ventas del Mes CAB" := PBAcantidadCAB;
+        ActivitiesCue.Insert();
+
+    end;
+
+    procedure CalcSalesShopCDMX(CalledFromWebService: Boolean; var Amount: Decimal)
+    var
+        CustLedgerEntry: Record "Cust. Ledger Entry";
+
+    begin
+        SetfilterWorkdate(CustLedgerEntry, CalledFromWebService); /////Filtro Por default
+        CustLedgerEntry.SetFilter("Global Dimension 1 Code", '01CDMX|01CPA|01CPS');  ///// Filtrar por valores necesarios para cada caso
+        CustLedgerEntry.CalcSums("Sales (LCY)");
+        Amount := CustLedgerEntry."Sales (LCY)";
+    end;
+
+    procedure CalcSalesShopSMA(CalledFromWebService: Boolean; var Amount: Decimal)
+    var
+        CustLedgerEntry: Record "Cust. Ledger Entry";
+
+    begin
+        SetfilterWorkdate(CustLedgerEntry, CalledFromWebService); /////Filtro Por default
+        CustLedgerEntry.SetFilter("Global Dimension 1 Code", '01SMA|01C15|01N15');
+        CustLedgerEntry.CalcSums("Sales (LCY)");
+        Amount := CustLedgerEntry."Sales (LCY)";
+    end;
+
+    procedure CalcSalesShopMTY(CalledFromWebService: Boolean; var Amount: Decimal)
+    var
+        CustLedgerEntry: Record "Cust. Ledger Entry";
+
+    begin
+        SetfilterWorkdate(CustLedgerEntry, CalledFromWebService); /////Filtro Por default
+        CustLedgerEntry.SetRange("Global Dimension 1 Code", '01MTY');
+        CustLedgerEntry.CalcSums("Sales (LCY)");
+        Amount := CustLedgerEntry."Sales (LCY)";
+    end;
+
+
+    procedure CalcSalesShopCAB(CalledFromWebService: Boolean; var Amount: Decimal)
+    var
+        CustLedgerEntry: Record "Cust. Ledger Entry";
+
+    begin
+        SetfilterWorkdate(CustLedgerEntry, CalledFromWebService); /////Filtro Por default
+        CustLedgerEntry.SetRange("Global Dimension 1 Code", '01CAB');
+        CustLedgerEntry.CalcSums("Sales (LCY)");
+        Amount := CustLedgerEntry."Sales (LCY)";
+    end;
+
+
+
+
+
+
+
+
+    procedure SetfilterWorkdate(var CustLedgerEntry: Record "Cust. Ledger Entry"; CalledFromWebService: Boolean)
+    begin
+        CustLedgerEntry.SetFilter("Document Type", '%1|%2',
+          CustLedgerEntry."Document Type"::Invoice, CustLedgerEntry."Document Type"::"Credit Memo");
+        if CalledFromWebService then
+            CustLedgerEntry.SetRange("Posting Date", CalcDate('<-CM>', Today), Today)
+        else
+            CustLedgerEntry.SetRange("Posting Date", CalcDate('<-CM>', GetDefaultWorkDate), GetDefaultWorkDate);
+    end;
+
+
+    local procedure GetDefaultWorkDate(): Date
+    var
+        LogInManagement: Codeunit LogInManagement;
+    begin
+        if DefaultWorkDate = 0D then
+            DefaultWorkDate := LogInManagement.GetDefaultWorkDate;
+        exit(DefaultWorkDate);
+    end;
+
+
+
+
+    var
+        DefaultWorkDate: Date;
+}
+pageextension 50130 "Role Center Extens" extends "Business Manager Role Center"
+{
+    layout
+    {
+        addbefore(Control16)
+        {
+            part(ControlYSS; "Cues Yael")
+            {
+                AccessByPermission = TableData "Cues Yael" = I;
+                ApplicationArea = Basic, Suite;
+            }
+
+        }
+    }
+
+    actions
+    {
+        // Add changes to page actions here
+    }
+
+    var
+        myInt: Integer;
+}
+
+pageextension 50131 PostedSalesCreditMemo extends "Posted Sales Credit Memo"
+{
+    layout
+    {
+        addafter("External Document No.")
+        {
+            field("N° Pizarra"; "N° Pizarra")
+            {
+                ApplicationArea = All;
+                Editable = false;
+            }
+        }
+    }
+
+    actions
+    {
+        // Add changes to page actions here
+    }
+
+    var
+        myInt: Integer;
+}
+pageextension 50132 PostedSalesCreditMemos extends "Posted Sales Credit Memos"
+{
+    layout
+    {
+        addafter("Currency Code")
+        {
+            field("N° Pizarra"; "N° Pizarra")
+            {
+                ApplicationArea = All;
+                Editable = false;
+            }
+        }
+    }
+
+    actions
+    {
+        // Add changes to page actions here
+    }
+
+    var
+        myInt: Integer;
+}
+pageextension 50133 SalesInvoiceSubform extends "Sales Invoice Subform"
+{
+    layout
+    {
+        // Add changes to page layout here
+    }
+
+    actions
+    {
+        addafter("&Line")
+        {
+            action("Asigna lotes")
+            {
+                ApplicationArea = All;
+                Image = Lot;
+
+                trigger OnAction()
+                var
+                    BolLineasFaltantes: Boolean;
+                    TbLinVenta: Record "Sales Line";
+                    TbProducto: Record Item;
+                    TbItemTracking: Record "Item Tracking Code";
+                    TbReservEntry: Record "Reservation Entry";
+                    TbReservEntry2: Record "Reservation Entry";
+                    VarCantidadPendiente: Decimal;
+                    TbMovprod: Record "Item Ledger Entry";
+                    TbTrackingSpecification: Record "Tracking Specification";
+                    CUItemTracking: Codeunit ItemTracking;
+                    VarApartadoCapa: Decimal;
+                    VarCantidadCapa: Decimal;
+                    VarCantidadAMover: Decimal;
+                    mreserv: Record "Reservation Entry";
+                    auxmreserv: Record "Reservation Entry";
+                    Salesinfo: Codeunit SalesInfoPaneMgtExten;
+                    detener: Boolean;
+                    Item: Record Item;
+
+                    QtyToReserve: Decimal;
+                    QtyToReserveBase: Decimal;
+                    ReservMgt: Codeunit "Reservation Management";
+
+                    ReserveSalesLine: Codeunit "Sales Line-Reserve";
+                    FullAutoReservation: Boolean;
+                begin
+                    BolLineasFaltantes := FALSE;
+                    TbLinVenta.RESET;
+                    TbLinVenta.SETRANGE("Document Type", Rec."Document Type");
+                    //TbLinVenta.SETRANGE("Document No.", Rec."No."); Este es cuendo estaba en la cabecera 
+                    TbLinVenta.SETRANGE("Document No.", Rec."Document No.");
+                    TbLinVenta.SETRANGE(Type, TbLinVenta.Type::Item);
+                    TbLinVenta.SETFILTER("Qty. to Ship", '>%1', 0);
+                    IF TbLinVenta.FINDFIRST THEN begin
+                        REPEAT
+                            IF TbLinVenta."Qty. to Ship" <> 0 THEN BEGIN
+                                TbProducto.GET(TbLinVenta."No.");
+                                IF TbItemTracking.GET(TbProducto."Item Tracking Code") THEN BEGIN
+                                    //IF TbItemTracking."Lot Specific Tracking" THEN
+                                    BEGIN
+                                        TbReservEntry.RESET;
+                                        TbReservEntry.SETRANGE("Source ID", TbLinVenta."Document No.");
+                                        TbReservEntry.SETRANGE("Source Ref. No.", TbLinVenta."Line No.");
+                                        IF TbReservEntry.FINDFIRST THEN
+                                            REPEAT
+                                                TbReservEntry2.RESET;
+                                                TbReservEntry2.SETRANGE("Entry No.", TbReservEntry."Entry No.");
+                                                IF TbReservEntry2.FINDFIRST THEN
+                                                    TbReservEntry2.DELETEALL;
+                                            UNTIL TbReservEntry.NEXT = 0;
+                                        BEGIN
+
+                                            VarCantidadPendiente := TbLinVenta."Qty. to Ship (Base)";
+
+                                            TbMovprod.RESET;
+                                            //               TbMovprod.SETCURRENTKEY("Item No.","Variant Code",Open,Positive,"Location Code",
+                                            //                               "Expiration Date","Posting Date","Lot No.","Serial No.");
+                                            //            TbMovprod.SETCURRENTKEY("Item No.",Open,"Variant Code",Positive,
+                                            //                                    "Expiration Date","Lot No.","Serial No.");
+
+                                            TbMovprod.SETCURRENTKEY("Item No.", "Variant Code", Open, Positive, "Location Code", "Posting Date", "Lot No.");
+
+                                            TbMovprod.SETRANGE("Item No.", TbLinVenta."No.");
+                                            IF TbLinVenta."Variant Code" <> '' THEN          //////////quedo vacio
+                                                TbMovprod.SETRANGE("Variant Code", TbLinVenta."Variant Code");
+                                            TbMovprod.SETRANGE(Open, TRUE);
+                                            TbMovprod.SETRANGE(Positive, TRUE);
+                                            TbMovprod.SETRANGE("Location Code", TbLinVenta."Location Code");
+                                            // TbMovprod.SETRANGE("Lote Bloqueado",FALSE);
+                                            IF TbMovprod.FINDFIRST THEN
+                                                REPEAT
+                                                    //*** codigo para revisar los lotes y cantidad disponible
+                                                    CLEAR(TbTrackingSpecification);
+                                                    TbTrackingSpecification.INIT;
+                                                    TbTrackingSpecification.Positive := FALSE;
+                                                    TbTrackingSpecification."Item No." := TbLinVenta."No.";
+                                                    TbTrackingSpecification."Location Code" := TbLinVenta."Location Code";
+                                                    TbTrackingSpecification."Creation Date" := WORKDATE;
+                                                    TbTrackingSpecification."Source Type" := 37;
+                                                    TbTrackingSpecification."Source Subtype" := 2; ///// aqui cambiamos para poder seguir LA FACTURA VENTA                                                   TbTrackingSpecification."Source ID" := TbLinVenta."Document No.";
+                                                    TbTrackingSpecification."Source Batch Name" := '';
+                                                    TbTrackingSpecification."Source Ref. No." := TbLinVenta."Line No.";
+                                                    TbTrackingSpecification."Lot No." := TbMovprod."Lot No.";
+                                                    TbTrackingSpecification."Qty. per Unit of Measure" := 1;
+                                                    //TbTrackingSpecification.INSERT;
+                                                    //*** fin codigo para revisar los lotes y cantidad disponible
+                                                    CLEAR(CUItemTracking);
+                                                    VarApartadoCapa := 0;
+                                                    CUItemTracking.AssistEditTrackingBP(TbTrackingSpecification, VarApartadoCapa);
+
+                                                    //TbMovprod."Remaining Quantity" := TbMovprod."Remaining Quantity" - VarApartadoCapa;
+                                                    VarCantidadAMover := 0;
+                                                    IF VarApartadoCapa > 0 THEN BEGIN
+                                                        VarCantidadCapa := VarApartadoCapa;
+
+                                                        IF VarCantidadCapa < VarCantidadPendiente THEN
+                                                            VarCantidadAMover := VarCantidadCapa
+                                                        ELSE
+                                                            VarCantidadAMover := VarCantidadPendiente;
+                                                    END;
+
+                                                    IF VarCantidadAMover > 0 THEN BEGIN
+                                                        mreserv.INIT;
+                                                        auxmreserv.RESET;
+                                                        IF auxmreserv.FINDLAST THEN //encuentra el ultimo
+                                                            mreserv."Entry No." := auxmreserv."Entry No." + 1   ///// si  lo hace 
+                                                        ELSE
+                                                            mreserv."Entry No." := 1;  //////////////////////////////////////////
+
+                                                        mreserv.Positive := FALSE;
+                                                        mreserv."Item No." := TbLinVenta."No.";
+                                                        mreserv."Location Code" := TbLinVenta."Location Code";
+                                                        mreserv."Qty. per Unit of Measure" := TbLinVenta."Qty. per Unit of Measure";
+                                                        mreserv.VALIDATE(Quantity, ROUND((VarCantidadAMover * -1) / mreserv."Qty. per Unit of Measure", 0.00001));
+                                                        mreserv.VALIDATE("Quantity (Base)", (VarCantidadAMover * -1));  // se va a buscar cantidad
+                                                        mreserv."Reservation Status" := mreserv."Reservation Status"::Surplus;
+                                                        mreserv."Creation Date" := WORKDATE;
+                                                        mreserv."Source Type" := 37;
+                                                        mreserv."Source Subtype" := 2; // cambio a 2 por Factura Venta
+                                                        mreserv."Source ID" := TbLinVenta."Document No.";
+                                                        mreserv."Source Batch Name" := '';
+                                                        mreserv."Source Ref. No." := TbLinVenta."Line No.";
+                                                        mreserv."Lot No." := TbMovprod."Lot No.";
+                                                        mreserv."Shipment Date" := WORKDATE;
+                                                        mreserv."Created By" := USERID;
+                                                        mreserv."Item Tracking" := mreserv."Item Tracking"::"Lot No.";
+                                                        mreserv.INSERT(TRUE);
+                                                        COMMIT;
+                                                    END;
+
+                                                    VarCantidadPendiente := VarCantidadPendiente - VarCantidadAMover;
+                                                UNTIL (TbMovprod.NEXT = 0) OR (VarCantidadPendiente = 0)
+                                            ELSE BEGIN
+                                                MESSAGE('No hay existencia y lote para el artículo: : %1 ', TbLinVenta."No.");
+                                            END;
+                                            IF VarCantidadPendiente > 0 THEN begin
+                                                BolLineasFaltantes := TRUE; ////aqui pon el mensaje 
+                                                ///desde aqui averigua que show 
+                                            end;
+                                        END;
+                                    END;
+                                END;
+                                if TbProducto."Item Tracking Code" = '' then begin
+                                    //Message('Mandame el producto que nos tine lote %1 tabla sales line %2  Rec %3  /n  %4', TbProducto."No.", TbLinVenta."Line No.", Rec, TbLinVenta);
+                                    TestField(Type, Type::Item);
+                                    TestField("No.");
+
+                                    ReserveSalesLine.ReservQuantity(TbLinVenta, QtyToReserve, QtyToReserveBase);
+                                    if QtyToReserveBase <> 0 then begin
+
+                                        ReservMgt.SetSalesLine(TbLinVenta); //+++ cambiamos por el Rec
+                                        TestField("Shipment Date");
+                                        ReservMgt.AutoReserve(FullAutoReservation, '', "Shipment Date", QtyToReserve, QtyToReserveBase);
+                                        Find;
+
+                                    end;
+                                end;
+                            END;
+                        UNTIL TbLinVenta.NEXT = 0;
+
+                        IF BolLineasFaltantes THEN begin
+                            Message('Existe al menos una línea en "líns. seguim. prod." que falta por asignar lote, para el producto %1 con el almacén %2, en la linea %3', TbLinVenta."No.", TbLinVenta."Location Code", TbLinVenta."Line No.");
+                        end else begin
+                            Message('Lotes Asignados!');
+                            //detener := true;
+                            Salesinfo.DetenSalesFactBox(detener);
+
+                        end;
+
+                    end;
+
+                end;
+            }
+        }
+    }
+
+    var
+        myInt: Integer;
+}
+pageextension 50134 TransferOrderSubform extends "Transfer Order Subform"
+{
+    layout
+    {
+        // Add changes to page layout here
+    }
+
+    actions
+    {
+        // Add changes to page actions here
+        addafter("&Line")
+        {
+            action("Asigna Lotes")
+            {
+                ApplicationArea = All;
+                Image = Lot;
+                trigger OnAction()
+                var
+
+                    BolLineasFaltantes: Boolean;
+                    TbTransferLine: Record "Transfer Line";
+                    TbProducto: Record Item;
+                    TbItemTracking: Record "Item Tracking Code";
+                    TbReservEntry: Record "Reservation Entry";
+                    TbReservEntry2: Record "Reservation Entry";
+                    VarCantidadPendiente: Decimal;
+                    TbMovprod: Record "Item Ledger Entry";
+                    TbTrackingSpecification: Record "Tracking Specification";
+                    CUItemTracking: Codeunit ItemTracking;
+                    VarApartadoCapa: Decimal;
+                    VarCantidadCapa: Decimal;
+                    VarCantidadAMover: Decimal;
+                    mreserv: Record "Reservation Entry";
+                    auxmreserv: Record "Reservation Entry";
+                    QtyToReserve: Decimal;
+                    QtyToReserveBase: Decimal;
+                    ReservMgt: Codeunit "Reservation Management";
+                    ReserveSalesLine: Codeunit "Sales Line-Reserve";
+                    FullAutoReservation: Boolean;
+                begin
+                    BolLineasFaltantes := FALSE;
+                    TbTransferLine.RESET;
+                    //TbTransferLine.SETRANGE("Document Type", Rec."Document Type");
+                    TbTransferLine.SETRANGE("Document No.", Rec."Document No.");
+                    //TbLinVenta.SETRANGE(Type, TbLinVenta.Type::Item);
+                    TbTransferLine.SETFILTER("Qty. to Ship", '>%1', 0);
+                    IF TbTransferLine.FINDFIRST THEN begin
+                        REPEAT
+                            IF TbTransferLine."Qty. to Ship" <> 0 THEN BEGIN
+                                TbProducto.GET(TbTransferLine."Item No.");
+                                IF TbItemTracking.GET(TbProducto."Item Tracking Code") THEN BEGIN
+                                    //IF TbItemTracking."Lot Specific Tracking" THEN
+                                    BEGIN
+                                        TbReservEntry.RESET;
+                                        TbReservEntry.SETRANGE("Source ID", TbTransferLine."Document No.");
+                                        TbReservEntry.SETRANGE("Source Ref. No.", TbTransferLine."Line No.");
+                                        IF TbReservEntry.FINDFIRST THEN
+                                            REPEAT
+                                                TbReservEntry2.RESET;
+                                                TbReservEntry2.SETRANGE("Entry No.", TbReservEntry."Entry No.");
+                                                IF TbReservEntry2.FINDFIRST THEN
+                                                    TbReservEntry2.DELETEALL;
+                                            UNTIL TbReservEntry.NEXT = 0;
+                                        BEGIN
+                                            VarCantidadPendiente := TbTransferLine."Qty. to Ship (Base)";
+                                            TbMovprod.RESET;
+                                            //               TbMovprod.SETCURRENTKEY("Item No.","Variant Code",Open,Positive,"Location Code",
+                                            //                               "Expiration Date","Posting Date","Lot No.","Serial No.");
+                                            //            TbMovprod.SETCURRENTKEY("Item No.",Open,"Variant Code",Positive,
+                                            //                                    "Expiration Date","Lot No.","Serial No.");
+
+                                            TbMovprod.SETCURRENTKEY("Item No.", "Variant Code", Open, Positive, "Location Code", "Posting Date", "Lot No.");
+
+                                            TbMovprod.SETRANGE("Item No.", TbTransferLine."Item No.");
+                                            IF TbTransferLine."Variant Code" <> '' THEN          //////////quedo vacio
+                                                TbMovprod.SETRANGE("Variant Code", TbTransferLine."Variant Code");
+                                            TbMovprod.SETRANGE(Open, TRUE);
+                                            TbMovprod.SETRANGE(Positive, TRUE);
+                                            TbMovprod.SETRANGE("Location Code", Rec."Transfer-from Code"); ////TbTransferLine."Location Code" cambio 
+                                            // TbMovprod.SETRANGE("Lote Bloqueado",FALSE);
+                                            IF TbMovprod.FINDFIRST THEN
+                                                REPEAT
+                                                    //*** codigo para revisar los lotes y cantidad disponible
+                                                    CLEAR(TbTrackingSpecification);
+                                                    TbTrackingSpecification.INIT;
+                                                    TbTrackingSpecification.Positive := FALSE;
+                                                    TbTrackingSpecification."Item No." := TbTransferLine."Item No.";
+                                                    TbTrackingSpecification."Location Code" := Rec."Transfer-from Code";// "Transfer-to Code"; //TbLinVenta."Location Code";
+                                                    TbTrackingSpecification."Creation Date" := WORKDATE;
+                                                    TbTrackingSpecification."Source Type" := 5741;
+                                                    TbTrackingSpecification."Source Subtype" := 1;
+                                                    TbTrackingSpecification."Source ID" := TbTransferLine."Document No.";
+                                                    TbTrackingSpecification."Source Batch Name" := '';
+                                                    TbTrackingSpecification."Source Ref. No." := TbTransferLine."Line No.";
+                                                    TbTrackingSpecification."Lot No." := TbMovprod."Lot No.";
+                                                    TbTrackingSpecification."Qty. per Unit of Measure" := 1;
+                                                    //TbTrackingSpecification.INSERT;
+                                                    //*** fin codigo para revisar los lotes y cantidad disponible
+                                                    CLEAR(CUItemTracking);
+                                                    VarApartadoCapa := 0;
+                                                    CUItemTracking.AssistEditTrackingBP(TbTrackingSpecification, VarApartadoCapa);
+
+                                                    //TbMovprod."Remaining Quantity" := TbMovprod."Remaining Quantity" - VarApartadoCapa;
+                                                    VarCantidadAMover := 0;
+                                                    IF VarApartadoCapa > 0 THEN BEGIN
+                                                        VarCantidadCapa := VarApartadoCapa;
+
+                                                        IF VarCantidadCapa < VarCantidadPendiente THEN
+                                                            VarCantidadAMover := VarCantidadCapa
+                                                        ELSE
+                                                            VarCantidadAMover := VarCantidadPendiente;
+                                                    END;
+
+                                                    IF VarCantidadAMover > 0 THEN BEGIN
+                                                        mreserv.INIT;
+                                                        auxmreserv.RESET;
+                                                        IF auxmreserv.FINDLAST THEN //encuentra el ultimo
+                                                            mreserv."Entry No." := auxmreserv."Entry No." + 1   ///// si  lo hace 
+                                                        ELSE
+                                                            mreserv."Entry No." := 1;  //////////////////////////////////////////
+
+                                                        mreserv.Positive := FALSE;
+                                                        mreserv."Item No." := TbTransferLine."Item No."; // TbLinVenta."No.";
+                                                        mreserv."Location Code" := Rec."Transfer-from Code";// "Transfer-to Code"; // TbLinVenta."Location Code";
+                                                        mreserv."Qty. per Unit of Measure" := TbTransferLine."Qty. per Unit of Measure";
+                                                        mreserv.VALIDATE(Quantity, ROUND((VarCantidadAMover * -1) / mreserv."Qty. per Unit of Measure", 0.00001));
+                                                        mreserv.VALIDATE("Quantity (Base)", (VarCantidadAMover * -1));  // se va a buscar cantidad
+                                                        mreserv."Reservation Status" := mreserv."Reservation Status"::Surplus;
+                                                        mreserv."Creation Date" := WORKDATE;
+                                                        mreserv."Source Type" := 5741;
+                                                        mreserv."Source Subtype" := 0;
+                                                        mreserv."Source ID" := TbTransferLine."Document No.";
+                                                        mreserv."Source Batch Name" := '';
+                                                        mreserv."Source Ref. No." := TbTransferLine."Line No.";
+                                                        mreserv."Lot No." := TbMovprod."Lot No.";
+                                                        mreserv."Shipment Date" := TbTransferLine."Shipment Date";// WORKDATE;
+                                                        mreserv."Created By" := USERID;
+                                                        mreserv."Item Tracking" := mreserv."Item Tracking"::"Lot No.";
+                                                        mreserv.INSERT(TRUE);
+                                                        Commit();
+                                                        //////////para la segunda Parte que hace en la tabla reservation entry
+
+                                                        mreserv.Reset();
+
+                                                        IF auxmreserv.FINDLAST THEN //encuentra el ultimo
+                                                            mreserv."Entry No." := auxmreserv."Entry No." + 1   ///// si  lo hace 
+                                                        ELSE
+                                                            mreserv."Entry No." := 1;
+                                                        mreserv.Positive := true;
+                                                        mreserv."Item No." := TbTransferLine."Item No."; // TbLinVenta."No.";
+                                                        mreserv."Location Code" := Rec."Transfer-to Code"; // TbLinVenta."Location Code";
+                                                        mreserv."Qty. per Unit of Measure" := TbTransferLine."Qty. per Unit of Measure";
+                                                        mreserv.VALIDATE(Quantity, ROUND((VarCantidadAMover) / mreserv."Qty. per Unit of Measure", 0.00001));
+                                                        mreserv.VALIDATE("Quantity (Base)", (VarCantidadAMover));  // se va a buscar cantidad
+                                                        mreserv."Reservation Status" := mreserv."Reservation Status"::Surplus;
+                                                        mreserv."Creation Date" := WORKDATE;
+                                                        mreserv."Source Type" := 5741;
+                                                        mreserv."Source Subtype" := 1;
+                                                        mreserv."Source ID" := TbTransferLine."Document No.";
+                                                        mreserv."Source Batch Name" := '';
+                                                        mreserv."Source Ref. No." := TbTransferLine."Line No.";
+                                                        mreserv."Lot No." := TbMovprod."Lot No.";
+                                                        mreserv."Expected Receipt Date" := TbTransferLine."Receipt Date";// WorkDate();
+                                                        Clear(mreserv."Shipment Date");
+                                                        mreserv."Created By" := USERID;
+                                                        mreserv."Item Tracking" := mreserv."Item Tracking"::"Lot No.";
+                                                        mreserv.INSERT(TRUE);
+                                                        COMMIT;
+                                                    END;
+
+                                                    VarCantidadPendiente := VarCantidadPendiente - VarCantidadAMover;
+                                                UNTIL (TbMovprod.NEXT = 0) OR (VarCantidadPendiente = 0)
+                                            ELSE BEGIN
+                                                MESSAGE('No hay existencia y lote para el artículo: : %1 ', TbTransferLine."Item No.");
+                                            END;
+                                            IF VarCantidadPendiente > 0 THEN begin
+                                                BolLineasFaltantes := TRUE; ////aqui pon el mensaje 
+                                                ///desde aqui averigua que show 
+                                            end;
+
+                                        END;
+                                    END;
+                                END;
+                                if TbProducto."Item Tracking Code" = '' then begin
+                                    //Message('Mandame el producto que nos tine lote %1 tabla sales line %2  Rec %3  /n  %4', TbProducto."No.", TbLinVenta."Line No.", Rec, TbLinVenta);
+                                    //TestField(Type, Type::Item);
+                                    TestField("Item No.");
+
+                                    /* ReserveSalesLine.ReservQuantity(TbTransferLine, QtyToReserve, QtyToReserveBase);
+                                     /if QtyToReserveBase <> 0 then begin
+
+                                         ReservMgt.SetSalesLine(TbTransferLine); //+++ cambiamos por el Rec
+                                         TestField("Shipment Date");
+                                         ReservMgt.AutoReserve(FullAutoReservation, '', "Shipment Date", QtyToReserve, QtyToReserveBase);
+                                         Find;
+
+                                     end;*/
+
+                                end;
+
+                            END;
+                        UNTIL TbTransferLine.NEXT = 0;
+
+                        IF BolLineasFaltantes THEN begin
+                            Message('Existe al menos una línea en "líns. seguim. prod." que falta por asignar lote, para el producto %1 con el almacén %2, en la linea %3', TbTransferLine."Item No.", Rec."Transfer-to Code", TbTransferLine."Line No.");
+                        end else begin
+                            Message('Lotes Asignados!');
+                            //detener := true;
+                            //Salesinfo.DetenSalesFactBox(detener);
+
+                        end;
+                    end;
+                end;
+            }
+        }
+    }
+
+    var
+        myInt: Integer;
+}
+
+pageextension 50135 GeneralLedgerSetup extends "General Ledger Setup"
+{
+    layout
+    {
+        addafter("Bank Recon. with Auto. Match")
+
+        {
+            field("Tipo de Cambio Dolar"; "Tipo de Cambio Dolar")
+            {
+                ApplicationArea = All;
+                Editable = true;
+            }
+            field(UsarPrecioDolar; UsarPrecioDolar)
+            {
+                ApplicationArea = All;
+            }
+        }
+    }
+
+    actions
+    {
+        // Add changes to page actions here
+    }
+
+    var
+        myInt: Integer;
+}
+
+page 50101 "Gestión de Embarques"
+{
+    PageType = List;
+    ApplicationArea = All;
+    UsageCategory = Lists;
+    SourceTable = GestionEmbarqueHeader;
+    CardPageId = DocumentGestionHeader;
+    InsertAllowed = false;
+    Caption = 'Gestión de Envíos';
+
+    layout
+    {
+        area(Content)
+        {
+            repeater(Envíos)
+            {
+                field("No. Factura"; "No.")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field(Estado; Estado)
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("No. cliente"; "Bill-to Customer No.")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("Nombre Cliente"; "Bill-to Name")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("N° Pizarra"; "N° Pizarra")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("Location Code"; "Location Code")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("Shipment Date"; "Shipment Date")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("Fecha inicio Envío"; "Fecha inicio embarque")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+            }
+        }
+    }
+}
+page 50102 GestionLine
+{
+    PageType = ListPart;
+    SourceTable = GestionEmbarqueLine;
+    Caption = 'Linea de Gestion';
+    //CaptionML = ENU = 'Gestion Line', ESM = 'Linea de Gestion';
+    layout
+    {
+        area(Content)
+        {
+            repeater(lineas)
+            {
+                field("Item No"; "Item No")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field(Description; Description)
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field(Bulto; Bulto)
+                {
+                    ApplicationArea = All;
+                }
+                field(Quantity; Quantity)
+                {
+                    ApplicationArea = All;
+                    Editable = true;
+                }
+            }
+        }
+    }
+}
+page 50103 DocumentGestionHeader
+{
+    PageType = Document;
+    ApplicationArea = All;
+    UsageCategory = Administration;
+    SourceTable = GestionEmbarqueHeader;
+    Caption = 'Documento de Gestion';
+    //CaptionML = ENU = 'management document', ESM = 'Documento de Gestión';
+
+    layout
+    {
+        area(Content)
+        {
+            group(General)
+            {
+                field("No."; "No.")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field(Estado; Estado)
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("Bill-to Customer No."; "Bill-to Customer No.")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("Bill-to Name"; "Bill-to Name")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("Shipment Date"; "Shipment Date")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("Location Code"; "Location Code")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("Fecha inicio embarque"; "Fecha inicio embarque")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("N° Pizarra"; "N° Pizarra")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field(NoBulto; NoBulto)
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("Item No"; "Item No")
+                {
+                    ApplicationArea = All;
+
+                    Editable = visible;
+
+                    trigger OnValidate()
+                    var
+                        Lineas: Record GestionEmbarqueLine;
+                        buscalinea: Record GestionEmbarqueLine;
+                        ultimo: Integer;
+                        SalesInvoiceLine: Record "Sales Invoice Line";
+                        cantidad: Integer;
+                        GestEmbarLine: Record GestionEmbarqueLine;
+                        sumacantidad: Decimal;
+                        GestEmbarqueline2: Record GestionEmbarqueLine;
+                        Faltan: Decimal;
+                        CadCorrecta: Text;
+                        CadACambiar: Text;
+                        CadConvertidaScaner: Code[20];
+                    begin
+                        //////////////////////////////////////////////////////////
+                        //Averigua si el producto escaneado trae un guion
+                        CadCorrecta := '-';
+                        CadACambiar := '''';
+
+                        CadConvertidaScaner := ConvertStr("Item No", CadACambiar, CadCorrecta);
+                        //Message('La cadena que busca es %1', CadConvertidaScaner);
+                        "Item No" := CadConvertidaScaner;
+
+                        //////////////////////////////////////////////////////////
+
+                        cantidad := 0;
+                        SalesInvoiceLine.SetRange("Document No.", "No.");
+                        SalesInvoiceLine.SetRange("No.", "Item No");
+                        if SalesInvoiceLine.FindFirst() then begin
+                            repeat
+                                cantidad := cantidad + SalesInvoiceLine.Quantity;  ///ya tine la cantidad de la factura
+                            until SalesInvoiceLine.Next() = 0;
+
+
+                            GestEmbarLine.SetRange("No.", "No.");
+
+                            if GestEmbarLine.FindSet() then begin
+
+                                GestEmbarqueline2.SetRange("No.", GestEmbarLine."No.");
+                                GestEmbarqueline2.SetRange("Item No", "Item No");
+                                if GestEmbarqueline2.FindSet() then begin
+                                    repeat
+                                        sumacantidad := sumacantidad + GestEmbarqueline2.Quantity; ///hace el recorrido de suma cantidad que hay en las lineas
+                                    until GestEmbarqueline2.Next() = 0;
+                                end;
+
+                            end;
+                            if sumacantidad < cantidad then begin
+
+                                Faltan := cantidad - sumacantidad;
+
+                                Item.SetRange("No.", "Item No");
+                                if Item.FindFirst() then begin
+
+                                    buscalinea.SetRange("No.", "No.");
+                                    buscalinea.SetRange("Item No", Item."No.");
+                                    buscalinea.SetRange(Bulto, NoBulto);
+                                    if buscalinea.FindFirst() then begin
+                                        buscalinea.Quantity := buscalinea.Quantity + 1;
+                                        buscalinea.Modify();
+                                    end
+                                    else begin
+
+                                        Lineas.SetRange("No.", "No.");
+                                        if Lineas.FindLast() then begin
+                                            ultimo := Lineas."Line No";  ///Averigua la última linea 
+                                        end;
+                                        Lineas."No." := "No.";
+                                        Lineas."Item No" := Item."No.";
+                                        Lineas.Description := Item.Description; //////Para cortar la cadena
+                                        Lineas."Line No" := ultimo + 1000;
+                                        Lineas.Bulto := NoBulto;
+                                        Lineas.Quantity := Faltan; //1; //// aqui inserta el 1 como cantidad predefinida 
+                                        Lineas.Insert();
+                                    end;
+                                    Clear("Item No");
+                                end;
+
+                            end else begin
+                                Message('La cantidad registrada para el producto %1, cumple con la cantidad registrada en la factura %2', "Item No", "No.");
+                            end;
+                        end
+                        else
+                            Message('El producto seleccionado no esta en la factura %1', "No.");
+                    end;
+                }
+            }
+
+            part(lista; GestionLine)
+            {
+                ApplicationArea = All;
+                SubPageLink = "No." = field("No.");
+            }
+        }
+    }
+
+    actions
+    {
+        area(Processing)
+        {
+            action("Crear Paquete")
+            {
+                ApplicationArea = All;
+                Caption = 'Crear paquete';
+
+
+                trigger OnAction()
+                var
+                    Gestionlinea: Record GestionEmbarqueLine;
+                    lineas: Integer;
+                    GestionLine2: Record GestionEmbarqueLine;
+                begin
+                    lineas := 0;
+                    Gestionlinea.SetRange("No.", Rec."No.");
+                    if Gestionlinea.Find('-') then begin
+
+                        GestionLine2.SetRange("No.", Rec."No.");
+                        if GestionLine2.FindSet() then begin
+                            repeat
+
+                                if lineas < GestionLine2.Bulto then begin
+                                    lineas := GestionLine2.Bulto;
+                                end;
+
+                            until GestionLine2.Next() = 0;
+
+                        end;
+                        NoBulto := lineas + 1;
+                        visible := true;
+                        Clear("Item No");
+                        CurrPage.Update();
+
+                    end else begin
+                        NoBulto := lineas + 1;
+                        visible := true;
+                        Clear("Item No");
+                    end;
+                    CurrPage.Update();
+
+                end;
+            }
+            action(Registrar)
+            {
+                ApplicationArea = All;
+
+                trigger OnAction()
+                var
+                    Gestionlineas: Record GestionEmbarqueLine;
+                    MandaDatosHist: Codeunit MandaHistorico;
+                    validaNobulto: Codeunit validaNobultos;
+                    validaCantidadPaquete: Codeunit ValidaCantidadePaquete;
+                begin
+                    validaCantidadPaquete.cantidadproducto(Rec."No.");
+                    validaNobulto.ValidaAntesdeRegistrar(Rec."No.");
+                    Gestionlineas.SetRange("No.", Rec."No.");
+                    if not Gestionlineas.Find('-') then
+                        Message('No hay nada que registrar')
+                    else
+                        if Confirm('¿Desea registar los paquetes a la factura?', false) then begin
+                            MandaDatosHist.TransfiereHeader(Rec."No.");
+                        end;
+                end;
+            }
+            action("Imprimir Etiquetas")
+            {
+                ApplicationArea = All;
+
+                trigger OnAction()
+                var
+                    validaNoBultos: Codeunit validaNobultos;
+                    validaCantidadPaquete: Codeunit ValidaCantidadePaquete;
+                begin
+                    validaCantidadPaquete.cantidadproducto(Rec."No.");
+                    validaNoBultos.valida(Rec."No.");
+
+                end;
+            }
+
+        }
+    }
+
+    var
+        visible: Boolean;
+        Item: Record Item;
+}
+page 50104 HistoricoDocGestionHeader
+{
+    PageType = Document;
+    ApplicationArea = All;
+    UsageCategory = Administration;
+    SourceTable = HistGestionEmbarqueHeader;
+    Caption = 'Documento historico de Gestión';
+    //CaptionML = ENU = 'management historic document', ESM = 'Documento Historico de Gestión';
+
+    layout
+    {
+        area(Content)
+
+        {
+            group(General)
+            {
+                field("No."; "No.")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field(Estado; Estado)
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("Bill-to Customer No."; "Bill-to Customer No.")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("Bill-to Name"; "Bill-to Name")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("Shipment Date"; "Shipment Date")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("Location Code"; "Location Code")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("Fecha inicio embarque"; "Fecha inicio embarque")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("N° Pizarra"; "N° Pizarra")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field(NoBulto; NoBulto)
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+            }
+            part(lista; HistGestionLine)
+            {
+                ApplicationArea = All;
+                SubPageLink = "No." = field("No.");
+            }
+        }
+    }
+
+    actions
+    {
+        area(Processing)
+        {
+            action("Imprimir Etiquetas")
+            {
+                ApplicationArea = All;
+
+                trigger OnAction()
+                var
+                    RepoBultos: Report Bultos;
+                    DocHistorico: Record HistGestionEmbarqueHeader;
+                begin
+                    DocHistorico.Reset();
+                    DocHistorico.SetRange("No.", Rec."No.");
+                    Clear(RepoBultos);
+                    RepoBultos.SetTableView(DocHistorico);
+                    RepoBultos.RunModal();
+                end;
+            }
+        }
+    }
+}
+page 50105 "Historico Gestión de Embarques"
+{
+    PageType = List;
+    ApplicationArea = All;
+    UsageCategory = Lists;
+    Caption = 'Historico Gestión de Envíos';
+
+    SourceTable = HistGestionEmbarqueHeader;
+    CardPageId = HistoricoDocGestionHeader;
+    InsertAllowed = false;
+    SourceTableView = where(Estado = filter(Enviado));
+    layout
+    {
+        area(Content)
+        {
+            repeater(Envíos)
+            {
+                field("No. Factura"; "No.")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field(Estado; Estado)
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("No. cliente"; "Bill-to Customer No.")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("Nombre Cliente"; "Bill-to Name")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("N° Pizarra"; "N° Pizarra")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("Location Code"; "Location Code")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("Shipment Date"; "Shipment Date")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("Fecha inicio embarque"; "Fecha inicio embarque")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("Fecha entrega paquete"; "Fecha entrega paquete")
+                {
+                    ApplicationArea = All;
+                    Editable = true;
+                }
+                field(Observaciones; Observaciones)
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("Estatus  envío"; "Estatus  envío")
+                {
+                    ApplicationArea = All;
+                    Editable = true;
+                }
+
+                field("Fecha Entrega 2"; "Fecha Entrega 2")
+                {
+                    ApplicationArea = All;
+                    Editable = true;
+                }
+                field("Fecha Entrega 3"; "Fecha Entrega 3")
+                {
+                    ApplicationArea = All;
+                    Editable = true;
+                }
+                field("Fecha Entrega 4"; "Fecha Entrega 4")
+                {
+                    ApplicationArea = All;
+                    Editable = true;
+                }
+                field(Comentarios; Comentarios)
+                {
+                    ApplicationArea = All;
+                    Editable = true;
+                }
+            }
+        }
+        area(FactBoxes)
+        {
+            systempart(Links; Links)
+            {
+                ApplicationArea = RecordLinks;
+            }
+            systempart(Notas; Notes)
+            {
+                ApplicationArea = Notes;
+            }
+        }
+    }
+
+}
+page 50106 HistGestionLine
+{
+    PageType = ListPart;
+    SourceTable = HistGestionEmbarqueLine;
+    Caption = 'Historico de Linea de Gestión';
+    //CaptionML = ENU = 'Historic Gestion Line', ESM = 'Historico de Linea de Gestion';
+    DeleteAllowed = false;
+    layout
+    {
+        area(Content)
+        {
+            repeater(lineas)
+            {
+                field("Item No"; "Item No")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field(Description; Description)
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field(Bulto; Bulto)
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field(Quantity; Quantity)
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+            }
+        }
+    }
+
+}
+page 50107 "Por eviar Gestión de Embarques"
+{
+    PageType = List;
+    ApplicationArea = All;
+    UsageCategory = Lists;
+    SourceTable = HistGestionEmbarqueHeader;
+    InsertAllowed = false;
+    Caption = 'Por enviar Gestión de Envíos';
+    SourceTableView = where(Estado = filter("Por enviar"));
+    layout
+    {
+        area(Content)
+        {
+            repeater(Envíos)
+            {
+                field("No. Factura"; "No.")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field(Estado; Estado)
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("Estatus Adicionales"; "Estatus Adicionales")
+                {
+                    ApplicationArea = All;
+                    Editable = true;
+                }
+                field("No. cliente"; "Bill-to Customer No.")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("Nombre Cliente"; "Bill-to Name")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("N° Pizarra"; "N° Pizarra")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("Location Code"; "Location Code")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("Order No."; "Order No.")
+                {
+                    ApplicationArea = All;
+                }
+                field("Shipment Date"; "Shipment Date")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("Fecha inicio embarque"; "Fecha inicio embarque")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field(Vendor; Vendor)
+                {
+                    ApplicationArea = All;
+                }
+                field(Ruta; Ruta)
+                {
+                    ApplicationArea = All;
+                }
+                field("N° Identificación"; "N° Identificación")
+                {
+                    ApplicationArea = All;
+                }
+                field(FechaEntrega; FechaEntrega)
+                {
+                    ApplicationArea = All;
+                }
+                field(Observaciones; Observaciones)
+                {
+                    ApplicationArea = All;
+                }
+            }
+        }
+    }
+    actions
+    {
+        area(Processing)
+        {
+            action("Reimprimir Etiquetas")
+            {
+                ApplicationArea = All;
+
+                trigger OnAction()
+                var
+                    RepoBultos: Report Bultos;
+                    DocHistorico: Record HistGestionEmbarqueHeader;
+                begin
+                    DocHistorico.Reset();
+                    DocHistorico.SetRange("No.", Rec."No.");
+                    Clear(RepoBultos);
+                    RepoBultos.SetTableView(DocHistorico);
+                    RepoBultos.RunModal();
+                end;
+            }
+            action("Conocimiento de Envío")
+            {
+                ApplicationArea = All;
+
+                trigger OnAction()
+                var
+                    ReporConociEmbarque: Report ConocimientoEmbarquehist;
+                    HisGestionEmbarHeader: Record HistGestionEmbarqueHeader;
+                begin
+                    HisGestionEmbarHeader.Reset();
+                    HisGestionEmbarHeader.SetRange("No.", Rec."No.");
+                    Clear(ReporConociEmbarque);
+                    ReporConociEmbarque.SetTableView(HisGestionEmbarHeader);
+                    ReporConociEmbarque.RunModal();
+                end;
+            }
+            action("Registrar como Enviado")
+            {
+                ApplicationArea = All;
+                trigger OnAction()
+                var
+                    MandaHist: Codeunit MandaHistorico;
+
+                begin
+                    MandaHist.CambiaEstadoEnviado(Rec."No.");
+                end;
+            }
+        }
+    }
+}
+page 50108 Ruta
+{
+    PageType = List;
+    ApplicationArea = All;
+    UsageCategory = Administration;
+    SourceTable = Ruta;
+
+    layout
+    {
+        area(Content)
+        {
+            repeater(rutas)
+            {
+                field(NoRutaCod; NoRutaCod)
+                {
+                    ApplicationArea = All;
+                }
+                field(Description; Description)
+                {
+                    ApplicationArea = All;
+                }
+                field(PrecioInferior; PrecioInferior)
+                {
+                    ApplicationArea = All;
+                }
+                field(PrecioSuperior; PrecioSuperior)
+                {
+                    ApplicationArea = All;
+                }
+            }
+        }
+    }
+
+    var
+    //myInt: Integer;
+}
+page 50109 "General warehouse"
+{
+    PageType = List;
+    ApplicationArea = All;
+    UsageCategory = ReportsAndAnalysis;
+    SourceTable = "Almacen Por Producto";
+    Editable = false;
+    DelayedInsert = true;
+
+    layout
+    {
+        area(Content)
+        {
+            repeater(group)
+            {
+                field("Cod.Producto"; "Cod.Producto")
+                {
+                    ApplicationArea = All;
+
+                }
+                field(Almacen; Almacen)
+                {
+                    ApplicationArea = All;
+                }
+                field(Cantidad; Cantidad)
+                {
+                    ApplicationArea = All;
+                }
+
+                field("Precio Con IVA"; "Precio Con IVA")
+                {
+                    ApplicationArea = All;
+                }
+
+                field("Cod.Pais"; "Cod.Pais")
+                {
+                    ApplicationArea = All;
+                }
+
+                field(Pais; Pais)
+                {
+                    ApplicationArea = All;
+
+                }
+                field(Fecha; Fecha)
+                {
+                    ApplicationArea = All;
+                }
+                field(Hora; Hora)
+                {
+                    ApplicationArea = All;
+                }
+
+
+
+
+            }
+
+
+        }
+
+    }
+
+
+
+}
+page 50110 PizarrasTranferencia
+{
+    PageType = List;
+    ApplicationArea = All;
+    UsageCategory = Administration;
+
+    SourceTable = PizarraTransferencia;
+
+    layout
+    {
+        area(Content)
+        {
+            group(General)
+            {
+                repeater(Pizarras)
+                {
+                    field(CodigoPizarra; CodigoPizarra)
+                    {
+                        Editable = true;
+                        ApplicationArea = All;
+                    }
+                    field("Descripción Pizarra"; "Descripción")
+                    {
+                        ApplicationArea = All;
+                    }
+                }
+            }
+
+        }
+    }
+}
+page 50111 ListPartPackageTransfer
+{
+    PageType = ListPart;
+    SourceTable = TransferPackageLine;
+    CaptionML = ENU = ' Package transfer list', ESM = 'Lista de paquetes de transferencia';
+    layout
+    {
+        area(Content)
+        {
+            repeater(lineas)
+            {
+                field("Item No"; "Item No")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field(Description; Description)
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field(Quantity; Quantity)
+                {
+                    ApplicationArea = All;
+
+                }
+                field("Package No."; "Package No.")
+                {
+                    ApplicationArea = All;
+                }
+            }
+        }
+    }
+}
+page 50112 "Package Transfer Document"
+{
+    PageType = Document;
+    ApplicationArea = All;
+    UsageCategory = Administration;
+    SourceTable = TransferenciaPaqueteHeader;
+    CaptionML = ENU = 'Package Transfer Document', ESM = 'Documento de paquetes de transferencia';
+
+    layout
+    {
+        area(Content)
+        {
+            group(General)
+            {
+                field("No."; "No.")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("Transfer-from Code"; "Transfer-from Code")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("Transfer-to Code"; "Transfer-to Code")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("N° Pizarra"; "N° Pizarra")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("N° Paquete"; "N° Paquete")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("Item No"; "Item No")
+                {
+                    ApplicationArea = All;
+
+                    Editable = visible;
+
+                    trigger OnValidate()
+                    var
+                        Lineas: Record TransferPackageLine;
+                        buscalinea: Record TransferPackageLine;
+                        ultimo: Integer;
+                        TransferLine: record "Transfer Line";
+                        cantidad: Integer;
+                        TransferPackage: Record TransferPackageLine;
+                        sumacantidad: Decimal;
+                        TransferPackage2: Record TransferPackageLine;
+                        Faltan: Decimal;
+                        CadCorrecta: Text;
+                        CadACambiar: Text;
+                        CadConvertidaScaner: Code[20];
+                    begin
+                        //////////////////////////////////////////////////////////
+                        //Averigua si el producto escaneado trae un guion
+                        CadCorrecta := '-';
+                        CadACambiar := '''';
+
+                        CadConvertidaScaner := ConvertStr("Item No", CadACambiar, CadCorrecta);
+                        //Message('La cadena que busca es %1', CadConvertidaScaner);
+                        "Item No" := CadConvertidaScaner;
+
+                        //////////////////////////////////////////////////////////
+
+
+                        cantidad := 0;
+                        TransferLine.SetRange("Document No.", "No.");
+                        TransferLine.SetRange("Item No.", "Item No");
+                        if TransferLine.FindFirst() then begin
+                            cantidad := TransferLine.Quantity;
+
+                            TransferPackage.SetRange("Document No.", "No.");
+
+                            if TransferPackage.FindSet() then begin
+
+                                TransferPackage2.SetRange("Document No.", TransferPackage."Document No.");
+                                TransferPackage2.SetRange("Item No", "Item No");
+
+                                if TransferPackage2.FindSet() then begin
+                                    repeat
+                                        sumacantidad := sumacantidad + TransferPackage2.Quantity;
+                                    until TransferPackage2.Next() = 0;
+                                end;
+
+                            end;
+                            if sumacantidad < cantidad then begin
+                                Faltan := cantidad - sumacantidad;
+
+                                Item.SetRange("No.", "Item No");
+                                if Item.FindFirst() then begin
+
+                                    buscalinea.SetRange("Document No.", "No.");
+                                    buscalinea.SetRange("Item No", Item."No.");
+                                    buscalinea.SetRange("Package No.", "N° Paquete");
+                                    if buscalinea.FindFirst() then begin
+                                        buscalinea.Quantity := buscalinea.Quantity + 1;
+                                        buscalinea.Modify();
+                                    end
+                                    else begin
+
+                                        Lineas.SetRange("Document No.", "No.");
+                                        if Lineas.FindLast() then begin
+                                            ultimo := Lineas."Line No";
+                                        end;
+                                        Lineas."Document No." := "No.";
+                                        Lineas."Item No" := Item."No.";
+                                        Lineas.Description := Item.Description;
+                                        Lineas."Line No" := ultimo + 1000;
+                                        Lineas."Package No." := "N° Paquete";
+                                        Lineas.Quantity := Faltan;
+                                        Lineas.Insert();
+                                    end;
+                                    Clear("Item No");
+                                end;
+                            end else begin
+                                Message('La cantidad registrada para el producto %1, cumple con la cantidad registrada en pedido de transferencia %2', "Item No", "No.");
+                            end;
+                        end
+                        else
+                            Message('El producto seleccionado no esta en el pedido %1', "No.");
+                    end;
+                }
+            }
+
+            part(ListPartPackageTransfer; ListPartPackageTransfer)
+            {
+                ApplicationArea = All;
+                SubPageLink = "Document No." = field("No.");
+            }
+        }
+    }
+
+    actions
+    {
+
+        area(Processing)
+        {
+
+            action("Crear paquete")
+            {
+                ApplicationArea = All;
+
+                trigger OnAction()
+                var
+                    TransferPackageLine: Record TransferPackageLine;
+                    lineas: Integer;
+                    TransferPackageLine2: Record TransferPackageLine;
+                begin
+
+                    lineas := 0;
+                    TransferPackageLine.SetRange("Document No.", Rec."No.");
+                    if TransferPackageLine.Find('-') then begin
+
+                        TransferPackageLine2.SetRange("Document No.", Rec."No.");
+                        if TransferPackageLine2.FindSet() then begin
+                            repeat
+
+                                if lineas < TransferPackageLine2."Package No." then begin
+                                    lineas := TransferPackageLine2."Package No.";
+                                end;
+
+                            until TransferPackageLine2.Next() = 0;
+                        end;
+                        "N° Paquete" := lineas + 1;
+                        visible := true;
+                        Clear("Item No");
+                        CurrPage.Update();
+
+                    end else begin
+                        "N° Paquete" := lineas + 1;
+                        visible := true;
+                        Clear("Item No");
+                    end;
+                    CurrPage.Update();
+
+                end;
+            }
+            /*action(Registrar)
+            {
+                ApplicationArea = All;
+
+                trigger OnAction()
+                var
+                    Gestionlineas: Record GestionEmbarqueLine;
+                    MandaDatosHist: Codeunit MandaHistorico;
+                    validaNobulto: Codeunit validaNobultos;
+                begin
+
+                    validaNobulto.ValidaAntesdeRegistrar(Rec."No.");
+                    Gestionlineas.SetRange("No.", Rec."No.");
+                    if not Gestionlineas.Find('-') then
+                        Message('No hay nada que registrar')
+                    else
+                        if Confirm('¿Desea registar los bultos a la factura?', false) then begin
+                            MandaDatosHist.TransfiereHeader(Rec."No.");
+                        end;
+                end;
+            }*/
+            action("Imprimir Etiquetas")
+            {
+                ApplicationArea = All;
+
+                trigger OnAction()
+                var
+
+                    ValidaPaquete: Codeunit ValidaPaquetes;
+                begin
+                    ValidaPaquete.valida(Rec."No.");
+                end;
+            }
+        }
+    }
+
+    var
+        visible: Boolean;
+        Item: Record Item;
+
+    trigger OnInit()
+    var
+
+    begin
+        visible := false;
+
+    end;
+
+}
+page 50113 "Listas de transferencia"
+{
+    PageType = List;
+    ApplicationArea = All;
+    UsageCategory = Lists;
+    SourceTable = TransferenciaPaqueteHeader;
+    CardPageId = "Package Transfer Document";
+    InsertAllowed = false;
+    CaptionML = ENU = 'Package tranfer list', ESM = 'Lista paquetes de transferencia';
+
+    layout
+    {
+        area(Content)
+        {
+            repeater("Paquetes de transferencia")
+            {
+                field("No. Transferencia"; "No.")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("Transfer-from Code"; "Transfer-from Code")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("Transfer-to Code"; "Transfer-to Code")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+                field("N° Pizarra"; "N° Pizarra")
+                {
+                    ApplicationArea = All;
+                }
+                field("Posting Date"; "Posting Date")
+                {
+                    ApplicationArea = All;
+                    Editable = false;
+                }
+            }
+        }
+    }
+}
+page 50114 Pedimento
+{
+    PageType = Worksheet;
+    ApplicationArea = All;
+    UsageCategory = Administration;
+    SourceTable = "Item Journal Line";
+
+    layout
+    {
+        area(Content)
+        {
+            group("Actualiza datos masivos")
+            {
+                field("Almacen destino"; NewLocation)
+                {
+                    ApplicationArea = All;
+                    TableRelation = Location;
+                }
+                field("N° de Pedimento"; NewLot)
+                {
+                    ApplicationArea = All;
+                }
+                field("Agente Aduanal"; AgenteAduanal)
+                {
+                    ApplicationArea = All;
+                }
+                field("PuertoEntrada"; PuertoEntrada)
+                {
+                    ApplicationArea = All;
+                }
+                field("Fecha Pedimento"; FechaPedimento)
+                {
+                    ApplicationArea = All;
+                }
+            }
+        }
+    }
+
+    actions
+
+    {
+    }
+
+    var
+        GlobalBachName: Code[10];
+        GlobalJTname: Code[10];
+        NewLocation: Code[10];
+        NewLot: Code[50];
+        AgenteAduanal: Text[250];
+        PuertoEntrada: Text[250];
+        FechaPedimento: Date;
+
+    trigger OnClosePage()
+    var
+        ItemJournalLine: Record "Item Journal Line";
+        ReservationEntry: Record "Reservation Entry";
+        LotNoInformation: Record "Lot No. Information";
+    begin
+        ItemJournalLine.SetRange("Journal Template Name", GlobalJTname);
+        ItemJournalLine.SetRange("Journal Batch Name", GlobalBachName);
+        if ItemJournalLine.FindSet() then begin
+            repeat
+                ItemJournalLine."New Location Code" := NewLocation;
+                ItemJournalLine.Modify();
+                /////va a buscar en las lineas de seguimiento 
+                ReservationEntry.SetRange("Source Batch Name", GlobalBachName);
+                ReservationEntry.SetRange("Source ID", GlobalJTname);
+                ReservationEntry.SetRange("Location Code", ItemJournalLine."Location Code");
+                if ReservationEntry.FindFirst() then begin
+                    repeat
+                        ReservationEntry."New Lot No." := NewLot;
+                        ReservationEntry.Modify();
+                    until ReservationEntry.Next() = 0;
+
+                end;
+                ////A partir de aqui es el tercer proceso, insertar en la informacion de lote
+
+                LotNoInformation.SetRange("Item No.", ItemJournalLine."Item No.");
+                LotNoInformation.SetRange("Lot No.", NewLot);
+                if not LotNoInformation.Find('-') then begin
+
+                    LotNoInformation."Item No." := ItemJournalLine."Item No.";
+                    LotNoInformation."Variant Code" := '';
+                    LotNoInformation."Lot No." := NewLot;
+                    LotNoInformation.AjenteAduanal := AgenteAduanal;
+                    LotNoInformation.PuertoEntrada := PuertoEntrada;
+                    LotNoInformation.FechaPedimento := FechaPedimento;
+                    LotNoInformation.Insert();
+                end else begin
+                    //Message('hay algun registro busca por producto');
+                end;
+            until ItemJournalLine.Next() = 0;
+
+        end;
+    end;
+
+    procedure RecibeBachName(BachName: Code[10]; JourTemplateName: code[10])
+    var
+    //myInt: Integer;
+    begin
+        GlobalBachName := BachName;
+        GlobalJTname := JourTemplateName;
+    end;
+}
+page 50115 ItemAttributeValueMapping
+{
+    PageType = List;
+    ApplicationArea = All;
+    UsageCategory = Administration;
+    SourceTable = "Item Attribute Value Mapping";
+    Caption = 'Asignación de valor de atributo de producto';
+
+
+    layout
+    {
+        area(Content)
+        {
+            repeater("Item attribute value mapping")
+            {
+                field("Table ID"; "Table ID")
+                {
+                    ApplicationArea = All;
+                }
+                field("No."; "No.")
+                {
+                    ApplicationArea = All;
+                }
+                field("Item Attribute ID"; "Item Attribute ID")
+                {
+                    ApplicationArea = All;
+                }
+                field("Item Attribute Value ID"; "Item Attribute Value ID")
+                {
+                    ApplicationArea = All;
+                }
+            }
+        }
+    }
+
+    actions
+    {
+        area(Processing)
+        {
+
+        }
+    }
+
+    var
+        myInt: Integer;
+}
+page 50122 "Cues Yael"
+{
+    Caption = 'RESUMEN DE VENTAS';
+    PageType = CardPart;
+    RefreshOnActivate = true;
+    ShowFilter = false;
+    SourceTable = "Cues Yael";
+
+    layout
+    {
+        area(Content)
+        {
+            cuegroup("Resumen de Ventas Por Empresa")
+            {
+                CueGroupLayout = Wide;
+                ShowCaption = false;
+
+                field("Ventas del Mes CDMX"; "Ventas del Mes CDMX")
+                {
+
+                    ToolTip = 'CDMX';
+                    ApplicationArea = Basic, Suite;
+                    DrillDownPageID = "Sales Invoice List";
+
+
+                    trigger OnDrillDown()
+                    begin
+                        PBACodeunitFiltrarCustLedgerEntry.DrillDownSalesThisMonthCDMX();
+                    end;
+
+                }
+
+                field("Ventas del Mes SMA"; "Ventas del Mes SMA")
+                {
+                    ToolTip = 'SMA';
+                    ApplicationArea = Basic, Suite;
+                    DrillDownPageID = "Sales Invoice List";
+
+                    trigger OnDrillDown()
+                    begin
+                        PBACodeunitFiltrarCustLedgerEntry.DrillDownSalesThisMonthSMA();
+                    end;
+                }
+                field("Ventas del Mes MTY"; "Ventas del Mes MTY")
+                {
+                    ToolTip = 'MTY';
+                    ApplicationArea = Basic, Suite;
+                    DrillDownPageID = "Sales Invoice List";
+
+                    trigger OnDrillDown()
+                    begin
+                        PBACodeunitFiltrarCustLedgerEntry.DrillDownSalesThisMonthMTY();
+                    end;
+                }
+                field("Ventas del Mes CAB"; "Ventas del Mes CAB")
+                {
+                    ToolTip = 'CAB';
+                    ApplicationArea = Basic, Suite;
+                    DrillDownPageID = "Sales Invoice List";
+
+                    trigger OnDrillDown()
+                    begin
+                        PBACodeunitFiltrarCustLedgerEntry.DrillDownSalesThisMonthCAB();
+                    end;
+                }
+            }
+        }
+    }
+    var
+        PBACodeunitFiltrarCustLedgerEntry: Codeunit ActivitiesMgtExten;
+}
